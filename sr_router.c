@@ -13,8 +13,8 @@
 
 #include <assert.h>
 #include <stddef.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "sr_arpcache.h"
@@ -33,21 +33,21 @@
  *---------------------------------------------------------------------*/
 
 void sr_init(struct sr_instance *sr) {
-    /* REQUIRES */
-    assert(sr);
+  /* REQUIRES */
+  assert(sr);
 
-    /* Initialize cache and cache cleanup thread */
-    sr_arpcache_init(&(sr->cache));
+  /* Initialize cache and cache cleanup thread */
+  sr_arpcache_init(&(sr->cache));
 
-    pthread_attr_init(&(sr->attr));
-    pthread_attr_setdetachstate(&(sr->attr), PTHREAD_CREATE_JOINABLE);
-    pthread_attr_setscope(&(sr->attr), PTHREAD_SCOPE_SYSTEM);
-    pthread_attr_setscope(&(sr->attr), PTHREAD_SCOPE_SYSTEM);
-    pthread_t thread;
+  pthread_attr_init(&(sr->attr));
+  pthread_attr_setdetachstate(&(sr->attr), PTHREAD_CREATE_JOINABLE);
+  pthread_attr_setscope(&(sr->attr), PTHREAD_SCOPE_SYSTEM);
+  pthread_attr_setscope(&(sr->attr), PTHREAD_SCOPE_SYSTEM);
+  pthread_t thread;
 
-    pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
+  pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
 
-    /* Add initialization code here! */
+  /* Add initialization code here! */
 
 } /* -- sr_init -- */
 
@@ -67,63 +67,68 @@ void sr_init(struct sr_instance *sr) {
  *
  *---------------------------------------------------------------------*/
 
+/* return the interface the packet is connecting to on this router, otherwise
+ * null*/
+struct sr_if *is_ip_to_self(struct sr_instance *sr, uint32_t packet_ip_addr) {
+  struct sr_if *interface = sr->if_list;
+
+  while (interface != NULL) {
+    if (interface->ip == packet_ip_addr) {
+      return interface;
+    }
+    interface = interface->next;
+  }
+  return NULL;
+}
+
 void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
                      unsigned int len, char *interface /* lent */) {
-    /* REQUIRES */
-    assert(sr);
-    assert(packet);
-    assert(interface);
+  /* REQUIRES */
+  assert(sr);
+  assert(packet);
+  assert(interface);
 
-    printf("*** -> Received packet of length %d \n", len);
+  printf("*** -> Received packet of length %d \n", len);
 
-    /* either an ARP request, or an IP packet */
+  /* either an ARP request, or an IP packet */
 
-} /* end sr_handlepacket */
+  int minlength = sizeof(sr_ethernet_hdr_t);
+  if (len < minlength) {
+    fprintf(stderr, "Ethernet packet too short\n");
+  }
+  print_hdr_eth(packet);
 
-/* takes in a dummy ethernet frame with a real IP packet, routes it and sends
-   it.
-   REQUIRES sizeof(struct sr_ethernet_hdr) free bytes before the IP header.
-     (this avoids extra malloc and copy just to prepend ethernet header)
-     
-   does not free any fields given to this function.
-   do not give this function a frame with malformed IP header.
-*/
-int sr_route_and_send(struct sr_instance *sr, uint8_t *packet,
-                       unsigned int len, char *interface) {
-    uint32_t dest_ip =
-        ntohl(*(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
-                            offsetof(struct sr_ip_hdr, ip_dst)));
-    struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
-    
-    if (rt_entry == NULL) {
-        /* ICMP Unreachable (type 3, code 0) */
-       return -1;
+  uint16_t ethtype = ethertype(packet);
+  if (ethtype == ethertype_ip) { /* IP */
+    minlength += sizeof(sr_ip_hdr_t);
+    if (len < minlength) {
+      fprintf(stderr, "IP packet too short\n");
     }
-
-    struct sr_if *out_iface = sr_get_interface(sr, rt_entry->interface);
-    if (out_iface == NULL) {
-       /* yeah... idk man */
-       return -1;
-    }
-
-    uint32_t hop_ip = rt_entry->gw.s_addr;
-    struct sr_ethernet_hdr *eth_hdr = (struct sr_ethernet_hdr *)packet;
-
-    memcpy(eth_hdr->ether_shost, out_iface->addr, 6);
-    eth_hdr->ether_type = htons(ethertype_ip);
-
-    struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), hop_ip);
-    if (arp_entry != NULL) {
-        memcpy(eth_hdr->ether_dhost, arp_entry->mac, 6);
-        sr_send_packet(sr, packet, len, rt_entry->interface);
-        free(arp_entry);
+    print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
+    /* 5.1.1 sanity_checksum() */
+    sr_ip_hdr_t *iphdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    if (is_ip_to_self(sr, iphdr->ip_dst) == NULL) {
+      /* IP address is this router.. now what?*/
     } else {
-        /* No entry for this IP, ARP for it, and queue this packet. */
-        struct sr_arpreq *req = sr_arpcache_queuereq(
-            &(sr->cache), hop_ip, packet, len, rt_entry->interface);
-        /* too slow to wait for the 1 second sr_arpcache_sweepreqs to happen. */
-        sr_handle_arpreq(sr, req);
+      /* 5.1.2 decrement_ttl()*/
+      uint8_t ip_proto = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
+      if (ip_proto == ip_protocol_icmp) { /* ICMP */
+        minlength += sizeof(sr_icmp_hdr_t);
+        if (len < minlength) {
+          fprintf(stderr, "ICMP packet too short\n");
+        }
+        print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) +
+                       sizeof(sr_ip_hdr_t));
+      }
     }
-    
-   return 0;
-}
+
+  } else if (ethtype == ethertype_arp) { /* ARP */
+    minlength += sizeof(sr_arp_hdr_t);
+    if (len < minlength) {
+      fprintf(stderr, "ARP packet too short\n");
+    }
+    print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));
+  } else {
+    fprintf(stderr, "Unknown packet type (%d) received\n", ethtype);
+  }
+} /* end sr_handlepacket */
