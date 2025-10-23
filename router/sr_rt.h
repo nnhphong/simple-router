@@ -41,7 +41,8 @@ int sr_load_rt(struct sr_instance*,const char*);
 void sr_add_rt_entry(struct sr_instance*, struct in_addr,struct in_addr,
                   struct in_addr, char*);
 void sr_print_routing_table(struct sr_instance* sr);
-void sr_print_routing_entry(struct sr_rt* entry);
+void sr_print_routing_entry(struct sr_rt *entry);
+struct sr_rt *sr_get_matching_route(struct sr_instance *sr, uint32_t dest_ip);
 
 
 #endif  /* --  sr_RT_H -- */

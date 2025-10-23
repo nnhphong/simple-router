@@ -106,6 +106,26 @@ struct sr_arpcache {
     pthread_mutexattr_t attr;
 };
 
+/*
+  as descirbed above:
+
+  > The handle_arpreq() function is a function you should write, and it should
+  > handle sending ARP requests if necessary:
+  >
+  > function handle_arpreq(req):
+  >     if difftime(now, req->sent) > 1.0
+  >         if req->times_sent >= 5:
+  >             send icmp host unreachable to source addr of all pkts waiting
+  >               on this request
+  >             arpreq_destroy(req)
+  >         else:
+  >             send arp request
+  >             req->sent = now
+  >             req->times_sent++
+
+ */
+void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req);
+
 /* Checks if an IP->MAC mapping is in the cache. IP is in network byte order. 
    You must free the returned structure if it is not NULL. */
 struct sr_arpentry *sr_arpcache_lookup(struct sr_arpcache *cache, uint32_t ip);

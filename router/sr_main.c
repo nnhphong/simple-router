@@ -17,6 +17,7 @@
 #define __EXTENSIONS__
 #endif /* _SOLARIS_ */
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -54,8 +55,9 @@ static void sr_load_rt_wrap(struct sr_instance* sr, char* rtable);
 /*-----------------------------------------------------------------------------
  *---------------------------------------------------------------------------*/
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
+       int x = offsetof(struct sr_ip_hdr, ip_dst);
+    printf("%d\n", x);
     int c;
     char *host   = DEFAULT_HOST;
     char *user = 0;

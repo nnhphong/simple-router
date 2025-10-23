@@ -11,15 +11,17 @@
  *
  **********************************************************************/
 
-#include <stdio.h>
 #include <assert.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
-
-#include "sr_if.h"
-#include "sr_rt.h"
-#include "sr_router.h"
-#include "sr_protocol.h"
 #include "sr_arpcache.h"
+#include "sr_if.h"
+#include "sr_protocol.h"
+#include "sr_router.h"
+#include "sr_rt.h"
 #include "sr_utils.h"
 
 /*---------------------------------------------------------------------
@@ -30,8 +32,7 @@
  *
  *---------------------------------------------------------------------*/
 
-void sr_init(struct sr_instance* sr)
-{
+void sr_init(struct sr_instance *sr) {
     /* REQUIRES */
     assert(sr);
 
@@ -45,7 +46,7 @@ void sr_init(struct sr_instance* sr)
     pthread_t thread;
 
     pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
-    
+
     /* Add initialization code here! */
 
 } /* -- sr_init -- */
@@ -66,19 +67,63 @@ void sr_init(struct sr_instance* sr)
  *
  *---------------------------------------------------------------------*/
 
-void sr_handlepacket(struct sr_instance* sr,
-        uint8_t * packet/* lent */,
-        unsigned int len,
-        char* interface/* lent */)
-{
-  /* REQUIRES */
-  assert(sr);
-  assert(packet);
-  assert(interface);
+void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
+                     unsigned int len, char *interface /* lent */) {
+    /* REQUIRES */
+    assert(sr);
+    assert(packet);
+    assert(interface);
 
-  printf("*** -> Received packet of length %d \n",len);
+    printf("*** -> Received packet of length %d \n", len);
 
-  /* fill in code here */
+    /* either an ARP request, or an IP packet */
 
-}/* end sr_ForwardPacket */
+} /* end sr_handlepacket */
 
+/* takes in a dummy ethernet frame with a real IP packet, routes it and sends
+   it.
+   REQUIRES sizeof(struct sr_ethernet_hdr) free bytes before the IP header.
+     (this avoids extra malloc and copy just to prepend ethernet header)
+     
+   does not free any fields given to this function.
+   do not give this function a frame with malformed IP header.
+*/
+int sr_route_and_send(struct sr_instance *sr, uint8_t *packet,
+                       unsigned int len, char *interface) {
+    uint32_t dest_ip =
+        ntohl(*(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
+                            offsetof(struct sr_ip_hdr, ip_dst)));
+    struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
+    
+    if (rt_entry == NULL) {
+        /* ICMP Unreachable (type 3, code 0) */
+       return -1;
+    }
+
+    struct sr_if *out_iface = sr_get_interface(sr, rt_entry->interface);
+    if (out_iface == NULL) {
+       /* yeah... idk man */
+       return -1;
+    }
+
+    uint32_t hop_ip = rt_entry->gw.s_addr;
+    struct sr_ethernet_hdr *eth_hdr = (struct sr_ethernet_hdr *)packet;
+
+    memcpy(eth_hdr->ether_shost, out_iface->addr, 6);
+    eth_hdr->ether_type = htons(ethertype_ip);
+
+    struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), hop_ip);
+    if (arp_entry != NULL) {
+        memcpy(eth_hdr->ether_dhost, arp_entry->mac, 6);
+        sr_send_packet(sr, packet, len, rt_entry->interface);
+        free(arp_entry);
+    } else {
+        /* No entry for this IP, ARP for it, and queue this packet. */
+        struct sr_arpreq *req = sr_arpcache_queuereq(
+            &(sr->cache), hop_ip, packet, len, rt_entry->interface);
+        /* too slow to wait for the 1 second sr_arpcache_sweepreqs to happen. */
+        sr_handle_arpreq(sr, req);
+    }
+    
+   return 0;
+}
