@@ -2,6 +2,7 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 #include "sr_router.h"
+#include "sr_utils.h"
 #include <netinet/in.h>
 #include <pthread.h>
 #include <sched.h>
@@ -59,7 +60,36 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
                 /* send ICMP host unreachable (type 3, code 1) */
             }
         } else {
-           /* we gucci */
+            /* send out ARP request */
+            struct sr_if *interface = sr_get_interface(sr, req->packets->iface);
+            unsigned char *mac_addr = interface->addr;
+
+            /* Ethernet layer */
+            sr_ethernet_hdr_t *ether = malloc(sizeof(sr_ethernet_hdr_t));
+            memcpy(ether->ether_shost, mac_addr, ETHER_ADDR_LEN);
+            memset(ether->ether_dhost, 0xff, ETHER_ADDR_LEN);   /* set to broadcast address*/
+            ether->ether_type = htons(ethertype_arp);
+
+            /* ARP layer */
+            sr_arp_hdr_t *arp = malloc(sizeof(sr_arp_hdr_t));
+            arp->ar_hrd = htons(arp_hrd_ethernet);
+            arp->ar_pro = htons(ethertype_ip);     /* I got this number from DeepSeek*/
+            arp->ar_hln = 6;
+            arp->ar_pln = 4;
+            arp->ar_op = htons(arp_op_request);
+            arp->ar_sip = interface->ip; 
+            arp->ar_tip = req->ip;
+            memcpy(arp->ar_sha, mac_addr, ETHER_ADDR_LEN);
+            memset(arp->ar_tha, 0xff, ETHER_ADDR_LEN);
+
+            int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+            uint8_t *packet = malloc(len);
+            memcpy(packet, ether, sizeof(sr_ethernet_hdr_t));
+            memcpy(packet + sizeof(sr_ethernet_hdr_t), arp, sizeof(sr_arp_hdr_t));
+            sr_send_packet(sr, packet, len, interface->name);
+            
+            req->times_sent += 1;
+            req->sent = now;
         }
     }
 }

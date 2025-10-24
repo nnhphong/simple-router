@@ -73,7 +73,20 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     assert(sr);
     assert(packet);
     assert(interface);
+    
+    /* Do not forget to keep ip addresses in network-byte order when handling packet*/
+    
 
+    /* 
+    when sending out an ARP requests, make sure to do the following:
+    1. Consult routing table for the packet's destination IP to get the correct interface
+    2. Queue the arp requets using sr_arpcache_queuereq() with **network-byte order**
+    IP and the interface obtained in step 1
+
+    route = sr_get_matching_route(packet)
+    sr_arpcache_queuereq(sr.cache, packet.dest_ip, packet, len, route.interface)
+    */
+    
     printf("*** -> Received packet of length %d \n", len);
 
     /* either an ARP request, or an IP packet */
