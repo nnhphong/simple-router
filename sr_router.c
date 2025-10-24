@@ -74,8 +74,40 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     assert(packet);
     assert(interface);
     
-    /* Do not forget to keep ip addresses in network-byte order when handling packet*/
+    /* Beginning of test code */
+    /* I was trying to create fake ARP requests for my router to send
+    and handle invalid arp requets, i.e has been sent 5+ times. So far, sending
+    ARP request is done, but i still cant verify if the client can receive
+    the ICMP error message if the router fails to perform the ARP request...
     
+    feel free to comment this code snippet below if you are using this commit*/
+    if (ethertype(packet) == ethertype_ip) {
+        print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));   
+    }
+
+    sr_ethernet_hdr_t *eth = (sr_ethernet_hdr_t*)packet;
+    sr_ip_hdr_t *ip = malloc(sizeof(sr_ip_hdr_t));
+    /* 
+    tos = 0b00000000 
+    routine, normal delay, normal throughput, normal reliability
+    */
+    ip->ip_tos = 0; 
+    ip->ip_len = 0;
+    ip->ip_id = 0;      /* ip_id = 0b000, may fragment, last fragment*/
+    ip->ip_off = 0;
+    ip->ip_ttl = 5;     /* assume time-to-live is 5 seconds */
+    ip->ip_p = 1;       /* https://datatracker.ietf.org/doc/html/rfc790 */
+    ip->ip_sum = cksum(NULL, 0);
+    ip->ip_src = inet_addr("10.0.1.100");
+    ip->ip_dst = inet_addr("10.0.1.1");
+    uint8_t *pkt = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+    memcpy(pkt, eth, sizeof(sr_ethernet_hdr_t));
+    memcpy(pkt + sizeof(sr_ethernet_hdr_t), ip, sizeof(sr_ip_hdr_t));
+    sr_arpcache_queuereq(&sr->cache, inet_addr("192.168.2.17"), pkt, len, interface);
+    /* End of test code */
+
+
+    /* Do not forget to keep ip addresses in network-byte order when handling packet*/
 
     /* 
     when sending out an ARP requests, make sure to do the following:
@@ -85,6 +117,14 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
 
     route = sr_get_matching_route(packet)
     sr_arpcache_queuereq(sr.cache, packet.dest_ip, packet, len, route.interface)
+    */
+
+    
+    /*
+    when receiving ARP's requests:
+    1. update the ARP cache's entries
+    2. for each packets waiting for the ARP requests, update the dest MAC, and
+    send the packet
     */
     
     printf("*** -> Received packet of length %d \n", len);

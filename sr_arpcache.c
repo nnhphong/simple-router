@@ -3,6 +3,7 @@
 #include "sr_protocol.h"
 #include "sr_router.h"
 #include "sr_utils.h"
+#include "sr_rt.h"
 #include <netinet/in.h>
 #include <pthread.h>
 #include <sched.h>
@@ -58,10 +59,81 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
 
             for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
                 /* send ICMP host unreachable (type 3, code 1) */
+                uint8_t *buf = pkt->buf;
+                sr_ethernet_hdr_t *pkt_ether = (sr_ethernet_hdr_t*)buf;
+                sr_ip_hdr_t *pkt_ip = (sr_ip_hdr_t*)(buf + sizeof(sr_ethernet_hdr_t));
+                struct sr_rt *route = (struct sr_rt*)sr_get_matching_route(sr, pkt_ip->ip_src);
+                print_addr_ip_int(ntohl(pkt_ip->ip_src));
+                if (route == NULL) {
+                    /* Packets are malformed */
+                    fprintf(stderr, "IP is unrecognized in routing table!\n");
+                    continue;
+                }
+                struct sr_if *interface = sr_get_interface(sr, route->interface);
+                if (interface == NULL) {
+                    fprintf(stderr, "Interface name is unrecognized\n");
+                    continue;
+                }
+                unsigned char *if_mac = interface->addr;
+                uint8_t *dst_mac = pkt_ether->ether_shost;
+
+                /* Ethernet layer */
+                sr_ethernet_hdr_t *ether = malloc(sizeof(sr_ethernet_hdr_t));
+                memcpy(ether->ether_shost, if_mac, ETHER_ADDR_LEN);
+                memcpy(ether->ether_dhost, dst_mac, ETHER_ADDR_LEN);
+                ether->ether_type = htons(ethertype_ip);
+
+                /* IP layer, assuming we don't need to fragment the packets */
+                sr_ip_hdr_t *ip = malloc(sizeof(sr_ip_hdr_t));
+                /* 
+                tos = 0b00000000 
+                routine, normal delay, normal throughput, normal reliability
+                */
+                ip->ip_tos = 0; 
+                ip->ip_len = 0;
+                ip->ip_id = 0;      /* ip_id = 0b000, may fragment, last fragment*/
+                ip->ip_off = 0;
+                ip->ip_ttl = 5;     /* assume time-to-live is 5 seconds */
+                ip->ip_p = 1;       /* https://datatracker.ietf.org/doc/html/rfc790 */
+                ip->ip_sum = cksum(NULL, 0);
+                ip->ip_src = interface->ip;
+                ip->ip_dst = pkt_ip->ip_src;
+
+                /* ICMP layer */
+                char *msg = malloc(sizeof(char) * 100);
+                strcpy(msg, "Destination host unreachable");
+                sr_icmp_hdr_t *icmp = malloc(sizeof(sr_icmp_hdr_t));
+                icmp->icmp_type = 3;
+                icmp->icmp_code = 1;
+                icmp->icmp_sum = htons(cksum(msg, strlen(msg)));
+
+
+                int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+                uint8_t *packet = malloc(len + strlen(msg));
+                memcpy(packet, ether, sizeof(sr_ethernet_hdr_t));
+                memcpy(packet + sizeof(sr_ethernet_hdr_t), ip, sizeof(sr_ip_hdr_t));
+                memcpy(
+                    packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t),
+                    icmp,
+                    sizeof(sr_icmp_hdr_t)
+                );
+                memcpy(packet + len, msg, strlen(msg));
+                /* printf("I am sending ICMP packet with size %d...\n", len + strlen(msg));
+                print_hdr_eth(packet);
+                print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
+                print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+                printf("\n\n"); */
+                sr_send_packet(sr, packet, len + strlen(msg), interface->name);
             }
+
+            sr_arpreq_destroy(&sr->cache, req);
         } else {
             /* send out ARP request */
             struct sr_if *interface = sr_get_interface(sr, req->packets->iface);
+            if (interface == NULL) {
+                fprintf(stderr, "Interface name is unrecognized\n");
+                return;
+            }
             unsigned char *mac_addr = interface->addr;
 
             /* Ethernet layer */
@@ -90,6 +162,7 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
             
             req->times_sent += 1;
             req->sent = now;
+            printf("Sent %d requests\n", req->times_sent);
         }
     }
 }
