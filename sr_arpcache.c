@@ -112,6 +112,11 @@ void send_unreachable_icmp(struct sr_instance *sr, int type, int code,
     print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
     printf("\n\n");   */
     sr_send_packet(sr, packet, len, interface->name);
+
+    free(ether);
+    free(ip);
+    free(icmp);
+    free(packet);
 }
 
 void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
@@ -181,6 +186,10 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
             req->times_sent += 1;
             req->sent = now;
             printf("Sent %d requests\n", req->times_sent);
+
+            free(ether);
+            free(arp);
+            free(packet);
         }
     }
 }

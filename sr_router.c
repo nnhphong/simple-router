@@ -85,6 +85,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
         print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));   
     }
     else {
+        /* the arp reply is back YAY */
         print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));   
     }
 
