@@ -27,8 +27,10 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 
     /* this function is called by sr_arpcache_timeout, which acquired
        the cache already for us. */
-    for (req = sr->cache.requests; req != NULL; req = req->next) {
+    for (req = sr->cache.requests; req != NULL; ) {
+        struct sr_arpreq *next = req->next;     /* current req might get destroyed in sr_handle_arpreq */
         sr_handle_arpreq(sr, req);
+        req = next;
     }
 }
 
