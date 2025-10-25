@@ -84,6 +84,9 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     if (ethertype(packet) == ethertype_ip) {
         print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));   
     }
+    else {
+        print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));   
+    }
 
     sr_ethernet_hdr_t *eth = (sr_ethernet_hdr_t*)packet;
     sr_ip_hdr_t *ip = malloc(sizeof(sr_ip_hdr_t));
@@ -91,19 +94,21 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     tos = 0b00000000 
     routine, normal delay, normal throughput, normal reliability
     */
+    ip->ip_v = 4;
+    ip->ip_hl = sizeof(sr_ip_hdr_t) / 4;
     ip->ip_tos = 0; 
-    ip->ip_len = 0;
+    ip->ip_len = htons(sizeof(sr_ip_hdr_t)); 
     ip->ip_id = 0;      /* ip_id = 0b000, may fragment, last fragment*/
     ip->ip_off = 0;
     ip->ip_ttl = 5;     /* assume time-to-live is 5 seconds */
     ip->ip_p = 1;       /* https://datatracker.ietf.org/doc/html/rfc790 */
-    ip->ip_sum = cksum(NULL, 0);
     ip->ip_src = inet_addr("10.0.1.100");
-    ip->ip_dst = inet_addr("10.0.1.1");
+    ip->ip_dst = inet_addr("192.168.2.2");
+    ip->ip_sum = cksum(ip, sizeof(sr_ip_hdr_t));
     uint8_t *pkt = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
     memcpy(pkt, eth, sizeof(sr_ethernet_hdr_t));
     memcpy(pkt + sizeof(sr_ethernet_hdr_t), ip, sizeof(sr_ip_hdr_t));
-    sr_arpcache_queuereq(&sr->cache, inet_addr("192.168.2.17"), pkt, len, interface);
+    sr_arpcache_queuereq(&sr->cache, inet_addr("192.168.2.2"), pkt, len, interface);
     /* End of test code */
 
 
