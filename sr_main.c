@@ -17,14 +17,14 @@
 #define __EXTENSIONS__
 #endif /* _SOLARIS_ */
 
-#include <assert.h>
-#include <pwd.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <string.h>
-#include <sys/types.h>
 #include <unistd.h>
+#include <pwd.h>
+#include <sys/types.h>
 
 #ifdef _LINUX_
 #include <getopt.h>
@@ -34,7 +34,7 @@
 #include "sr_router.h"
 #include "sr_rt.h"
 
-extern char *optarg;
+extern char* optarg;
 
 /*-----------------------------------------------------------------------------
  *---------------------------------------------------------------------------*/

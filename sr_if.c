@@ -9,18 +9,18 @@
  *
  *---------------------------------------------------------------------------*/
 
-#include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <assert.h>
 #include <string.h>
+#include <stdlib.h>
 
 #ifdef _DARWIN_
 #include <sys/types.h>
 #endif /* _DARWIN_ */
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "sr_if.h"
 #include "sr_router.h"

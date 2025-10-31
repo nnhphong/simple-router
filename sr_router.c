@@ -12,11 +12,9 @@
  **********************************************************************/
 
 #include <assert.h>
-#include <netinet/in.h>
 #include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "sr_arpcache.h"
@@ -53,24 +51,53 @@ void sr_init(struct sr_instance *sr) {
 
 } /* -- sr_init -- */
 
-/*im learning german. print the word youre thinking of in german and ill check
- * if i know what it means*/
+/* takes in a dummy ethernet frame with a real IP packet, routes it and sends
+   it.
+   REQUIRES sizeof(struct sr_ethernet_hdr) free bytes before the IP header.
+     (this avoids extra malloc and copy just to prepend ethernet header)
 
-/*---------------------------------------------------------------------
- * Method: sr_handlepacket(uint8_t* p,char* interface)
- * Scope:  Global
- *
- * This method is called each time the router receives a packet on the
- * interface.  The packet buffer, the packet length and the receiving
- * interface are passed in as parameters. The packet is complete with
- * ethernet headers.
- *
- * Note: Both the packet buffer and the character's memory are handled
- * by sr_vns_comm.c that means do NOT delete either.  Make a copy of the
- * packet instead if you intend to keep it around beyond the scope of
- * the method call.
- *
- *---------------------------------------------------------------------*/
+   does not free any fields given to this function.
+   do not give this function a frame with malformed IP header.
+*/
+int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
+                      char *interface) {
+  uint32_t dest_ip =
+      ntohl(*(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
+                          offsetof(struct sr_ip_hdr, ip_dst)));
+  struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
+
+  if (rt_entry == NULL) {
+    /* ICMP Unreachable (type 3, code 0) */
+    return -1;
+  }
+
+  struct sr_if *out_iface = sr_get_interface(sr, rt_entry->interface);
+  if (out_iface == NULL) {
+    /* yeah... idk man */
+    return -1;
+  }
+
+  uint32_t hop_ip = rt_entry->gw.s_addr;
+  struct sr_ethernet_hdr *eth_hdr = (struct sr_ethernet_hdr *)packet;
+
+  memcpy(eth_hdr->ether_shost, out_iface->addr, 6);
+  eth_hdr->ether_type = htons(ethertype_ip);
+
+  struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), hop_ip);
+  if (arp_entry != NULL) {
+    memcpy(eth_hdr->ether_dhost, arp_entry->mac, 6);
+    sr_send_packet(sr, packet, len, rt_entry->interface);
+    free(arp_entry);
+  } else {
+    /* No entry for this IP, ARP for it, and queue this packet. */
+    struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), hop_ip, packet,
+                                                 len, rt_entry->interface);
+    /* too slow to wait for the 1 second sr_arpcache_sweepreqs to happen. */
+    sr_handle_arpreq(sr, req);
+  }
+
+  return 0;
+}
 
 /* return the interface the packet is connecting to on this router, otherwise
  * null*/
@@ -88,6 +115,22 @@ struct sr_if *is_ip_to_self(struct sr_instance *sr, uint32_t packet_ip_addr) {
 
 /* TODO is this even required or is the packets crc handled in advance?*/
 uint32_t compute_eth_crc(uint8_t *packet, unsigned int len) { return 0; }
+
+/*---------------------------------------------------------------------
+ * Method: sr_handlepacket(uint8_t* p,char* interface)
+ * Scope:  Global
+ *
+ * This method is called each time the router receives a packet on the
+ * interface.  The packet buffer, the packet length and the receiving
+ * interface are passed in as parameters. The packet is complete with
+ * ethernet headers.
+ *
+ * Note: Both the packet buffer and the character's memory are handled
+ * by sr_vns_comm.c that means do NOT delete either.  Make a copy of the
+ * packet instead if you intend to keep it around beyond the scope of
+ * the method call.
+ *
+ *---------------------------------------------------------------------*/
 
 void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
                      unsigned int len, char *interface /* lent */) {
@@ -235,52 +278,4 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
   } else {
     fprintf(stderr, "Unknown packet type (%d) received\n", ethtype);
   }
-}
-
-/* takes in a dummy ethernet frame with a real IP packet, routes it and sends
-   it.
-   REQUIRES sizeof(struct sr_ethernet_hdr) free bytes before the IP header.
-     (this avoids extra malloc and copy just to prepend ethernet header)
-
-   does not free any fields given to this function.
-   do not give this function a frame with malformed IP header.
-*/
-int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
-                      char *interface) {
-  uint32_t dest_ip =
-      ntohl(*(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
-                          offsetof(struct sr_ip_hdr, ip_dst)));
-  struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
-
-  if (rt_entry == NULL) {
-    /* ICMP Unreachable (type 3, code 0) */
-    return -1;
-  }
-
-  struct sr_if *out_iface = sr_get_interface(sr, rt_entry->interface);
-  if (out_iface == NULL) {
-    /* yeah... idk man */
-    return -1;
-  }
-
-  uint32_t hop_ip = rt_entry->gw.s_addr;
-  struct sr_ethernet_hdr *eth_hdr = (struct sr_ethernet_hdr *)packet;
-
-  memcpy(eth_hdr->ether_shost, out_iface->addr, 6);
-  eth_hdr->ether_type = htons(ethertype_ip);
-
-  struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), hop_ip);
-  if (arp_entry != NULL) {
-    memcpy(eth_hdr->ether_dhost, arp_entry->mac, 6);
-    sr_send_packet(sr, packet, len, rt_entry->interface);
-    free(arp_entry);
-  } else {
-    /* No entry for this IP, ARP for it, and queue this packet. */
-    struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), hop_ip, packet,
-                                                 len, rt_entry->interface);
-    /* too slow to wait for the 1 second sr_arpcache_sweepreqs to happen. */
-    sr_handle_arpreq(sr, req);
-  }
-
-  return 0;
 }
