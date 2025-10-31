@@ -59,14 +59,14 @@ void sr_init(struct sr_instance *sr) {
    does not free any fields given to this function.
    do not give this function a frame with malformed IP header.
 */
-int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
-                      char *interface) {
+int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len) {
   uint32_t dest_ip =
       ntohl(*(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
                           offsetof(struct sr_ip_hdr, ip_dst)));
   struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
 
   if (rt_entry == NULL) {
+    /* TODO if route DNE send icmp 'route non-existing packet' 5.2.3.2 */
     /* ICMP Unreachable (type 3, code 0) */
     return -1;
   }
@@ -74,7 +74,8 @@ int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
   struct sr_if *out_iface = sr_get_interface(sr, rt_entry->interface);
   if (out_iface == NULL) {
     /* yeah... idk man */
-    return -1;
+    fprintf(stderr, "Could not find exit interface\n");
+    return -2;
   }
 
   uint32_t hop_ip = rt_entry->gw.s_addr;
@@ -105,7 +106,7 @@ struct sr_if *is_ip_to_self(struct sr_instance *sr, uint32_t packet_ip_addr) {
   struct sr_if *interface = sr->if_list;
 
   while (interface != NULL) {
-    if (interface->ip == packet_ip_addr) {
+    if (interface->ip == ntohl(packet_ip_addr)) {
       return interface;
     }
     interface = interface->next;
@@ -146,6 +147,8 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
   the ICMP error message if the router fails to perform the ARP request...
 
   feel free to comment this code snippet below if you are using this commit*/
+
+
   if (ethertype(packet) == ethertype_ip) {
     print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
   } else {
@@ -174,7 +177,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
   memcpy(pkt, eth, sizeof(sr_ethernet_hdr_t));
   memcpy(pkt + sizeof(sr_ethernet_hdr_t), ip, sizeof(sr_ip_hdr_t));
   sr_arpcache_queuereq(&sr->cache, inet_addr("192.168.2.2"), pkt, len,
-                       interface);
+                       interface); 
   /* End of test code */
 
   /* Do not forget to keep ip addresses in network-byte order when handling
@@ -205,6 +208,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
   int minlength = sizeof(sr_ethernet_hdr_t);
   if (len < minlength) {
     fprintf(stderr, "Ethernet packet too short\n");
+    return;
   }
   print_hdr_eth(packet);
 
@@ -214,8 +218,9 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     minlength += sizeof(sr_ip_hdr_t);
     if (len < minlength) {
       fprintf(stderr, "IP packet too short\n");
+      return;
     }
-    print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
+    /*print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));*/
 
     sr_ip_hdr_t *iphdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
 
@@ -223,6 +228,10 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     uint16_t packet_sum = iphdr->ip_sum;
     iphdr->ip_sum = 0;
     iphdr->ip_sum = cksum(iphdr, sizeof(sr_ip_hdr_t));
+    if (iphdr->ip_sum != packet_sum) {
+      fprintf(stderr, "IP Checksum Failed\n");
+      return;
+    }
     assert(iphdr->ip_sum == packet_sum);
     fprintf(stdout, "checksum function works, delete this line");
 
@@ -233,6 +242,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       minlength += sizeof(sr_icmp_hdr_t);
       if (len < minlength) {
         fprintf(stderr, "ICMP packet too short\n");
+        return;
       }
       print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
       icmphdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) +
@@ -254,7 +264,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     } else {
       /* 5.1.2 Decrement TTL and return if 0 */
       iphdr->ip_ttl -= 1;
-      if (iphdr->ip_ttl == 0) {
+      if (iphdr->ip_ttl <= 0) {
         /* 5.2.3.5 Time Exceeded Response*/
         /* TODO send ICMP time-exceeded */
         return;
@@ -264,8 +274,9 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       iphdr->ip_sum = 0;
       iphdr->ip_sum = cksum(iphdr, sizeof(sr_ip_hdr_t));
 
-      /* TODO forward packet*/
-      /* if route DNE send icmp 'route non-existing packet' 5.2.3.2 */
+      /* Forward the packet */
+      sr_route_and_send(sr, packet, len);
+
     }
 
     /* ARP */
@@ -273,9 +284,11 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     minlength += sizeof(sr_arp_hdr_t);
     if (len < minlength) {
       fprintf(stderr, "ARP packet too short\n");
+      return;
     }
     print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));
   } else {
     fprintf(stderr, "Unknown packet type (%d) received\n", ethtype);
+    return;
   }
 }
