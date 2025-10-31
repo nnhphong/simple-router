@@ -9,6 +9,4 @@
 #ifndef SR_ICMP_H
 #define SR_ICMP_H
 
-
-
 #endif /* SR_ICMP_H */

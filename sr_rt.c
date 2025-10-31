@@ -172,6 +172,7 @@ void sr_print_routing_entry(struct sr_rt *entry) {
 struct sr_rt *sr_get_matching_route(struct sr_instance *sr, uint32_t dest_ip) {
     struct sr_rt *best_match = NULL;
     struct sr_rt *rt;
+    dest_ip = ntohl(dest_ip);
 
     for (rt = sr->routing_table; rt != NULL; rt = rt->next) {
         uint32_t rt_dest = ntohl(rt->dest.s_addr);
