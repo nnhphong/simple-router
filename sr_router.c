@@ -55,16 +55,16 @@ void sr_init(struct sr_instance *sr) {
 
 /* Send an icmp packet given the router, type and code of icmp, and destination in network format.*/
 
-int sr_send_icmp(struct sr_instance *sr, uint8_t type, uint8_t code, uint32_t dest_ip) {
+int sr_send_icmp_t0(struct sr_instance *sr, uint8_t type, uint8_t code, uint32_t dest_ip) {
   int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
   uint8_t *packet = malloc(len);
 
   /* ethernet header is configured by sr_route_and_send */
   /* Configure the IP header - sum and src are found in sr_route_and_send */
   sr_ip_hdr_t *iph = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-  iph->ip_hl = 4; /* TODO not sure about these two */
+  iph->ip_hl = sizeof(sr_ip_hdr_t) / 4;
   iph->ip_v = 4;
-  iph->ip_len = htons(sizeof(sr_ip_hdr_t));
+  iph->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
   iph->ip_tos = 0; /* Best effort / non-configured */
   iph->ip_id = 0;
   iph->ip_off = 0;
@@ -107,7 +107,7 @@ int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
     /* TODO if route DNE send icmp 'route non-existing packet' 5.2.3.2 */
     /* ICMP Unreachable (type 3, code 0) */
     uint32_t src_ip = *(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) + offsetof(struct sr_ip_hdr, ip_src));
-    sr_send_icmp(sr, 3, 0, src_ip);
+    /*sr_send_icmp(sr, 3, 0, src_ip); USE T3 sender*/
     return -1;
   }
 
@@ -281,8 +281,6 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       fprintf(stderr, "IP Checksum Failed\n");
       return;
     }
-    assert(iphdr->ip_sum == packet_sum);
-    fprintf(stdout, "checksum function works, delete this line");
 
     /* Check if ICMP */
     uint8_t ip_proto = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
@@ -306,7 +304,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
         /* TODO send echo response */
       }
       /* 5.2.3.4 Traceroute supporting response */
-      else if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 0) {
+      else if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 3 && icmphdr->icmp_code == 3) {
         /* TODO send port unreachable */
       }
 
