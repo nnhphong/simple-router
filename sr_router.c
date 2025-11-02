@@ -261,7 +261,8 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
         fprintf(stderr, "ICMP packet too short\n");
         return;
       }
-      print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+      printf("Received ICMP\n");
+      /*print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));*/
       icmphdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) +
                                   sizeof(sr_ip_hdr_t));
     }
