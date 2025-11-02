@@ -123,7 +123,7 @@ void send_unreachable_icmp(struct sr_instance *sr, int type, int code,
 
 void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
     time_t now = time(NULL);
-
+    
     if (difftime(now, req->sent) > 1.0) {
         if (req->times_sent >= 5) {
             struct sr_packet *pkt;
@@ -138,33 +138,7 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
             sr_arpreq_destroy(&sr->cache, req);
         } else {
             /* send out ARP request */
-            struct sr_rt *route =
-                (struct sr_rt *)sr_get_matching_route(sr, req->ip);
-            struct sr_if *interface = sr_get_interface(sr, route->interface);
-            if (interface == NULL) {
-                fprintf(stderr, "Interface name is unrecognized\n");
-                return;
-            }
-            unsigned char *mac_addr = interface->addr;
-
-            uint8_t packet[SR_ARP_FRAME_LEN];
-            sr_ethernet_hdr_t *eth = (sr_ethernet_hdr_t *)packet;
-            sr_arp_hdr_t *arp = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-
-            memcpy(eth->ether_shost, mac_addr, ETHER_ADDR_LEN);
-            memset(eth->ether_dhost, 0xff, ETHER_ADDR_LEN);
-            eth->ether_type = htons(ethertype_arp);
-            arp->ar_hrd = htons(arp_hrd_ethernet);
-            arp->ar_pro = htons(ethertype_ip);
-            arp->ar_hln = 6;
-            arp->ar_pln = 4;
-            arp->ar_op = htons(arp_op_request);
-            arp->ar_sip = interface->ip;
-            arp->ar_tip = req->ip;
-            memcpy(arp->ar_sha, mac_addr, ETHER_ADDR_LEN);
-            memset(arp->ar_tha, 0xff, ETHER_ADDR_LEN);
-
-            sr_send_packet(sr, packet, SR_ARP_FRAME_LEN, interface->name);
+            sr_send_arp(sr, arp_op_request, req->ip, NULL);
 
             req->times_sent += 1;
             req->sent = now;
@@ -396,4 +370,49 @@ void *sr_arpcache_timeout(void *sr_ptr) {
     }
 
     return NULL;
+}
+
+/* Send out ARP request or response to target IP
+   if op_code == arp_op_request -> dest_mac_addr = NULL
+   if op_code == arp_op_reply   -> dest_mac_addr is dest host's MAC
+*/
+void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode op_code, uint32_t dest_ip, unsigned char *dest_mac_addr) {
+    struct sr_rt *route =
+        (struct sr_rt *)sr_get_matching_route(sr, dest_ip);
+    struct sr_if *interface = sr_get_interface(sr, route->interface);
+    if (interface == NULL) {
+        fprintf(stderr, "Interface name is unrecognized\n");
+        return;
+    }
+    unsigned char *mac_addr = interface->addr;
+
+    uint8_t packet[SR_ARP_FRAME_LEN];
+    sr_ethernet_hdr_t *eth = (sr_ethernet_hdr_t *)packet;
+    sr_arp_hdr_t *arp = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
+    memcpy(eth->ether_shost, mac_addr, ETHER_ADDR_LEN);
+    eth->ether_type = htons(ethertype_arp);
+    arp->ar_hrd = htons(arp_hrd_ethernet);
+    arp->ar_pro = htons(ethertype_ip);
+    arp->ar_hln = 6;
+    arp->ar_pln = 4;
+    arp->ar_op = htons(op_code);
+    arp->ar_sip = interface->ip;
+    arp->ar_tip = dest_ip;
+    memcpy(arp->ar_sha, mac_addr, ETHER_ADDR_LEN);
+    
+
+    if (op_code == arp_op_request) {
+        memset(eth->ether_dhost, 0xff, ETHER_ADDR_LEN);
+        memset(arp->ar_tha, 0xff, ETHER_ADDR_LEN);
+    }
+    else {
+        memcpy(eth->ether_dhost, dest_mac_addr, ETHER_ADDR_LEN);
+        memcpy(arp->ar_tha, dest_mac_addr, ETHER_ADDR_LEN);
+    }
+
+    print_hdr_eth(packet);
+    print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));
+
+    sr_send_packet(sr, packet, SR_ARP_FRAME_LEN, interface->name);
 }
