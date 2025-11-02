@@ -2,8 +2,8 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 #include "sr_router.h"
-#include "sr_utils.h"
 #include "sr_rt.h"
+#include "sr_utils.h"
 #include <netinet/in.h>
 #include <pthread.h>
 #include <sched.h>
@@ -27,8 +27,9 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 
     /* this function is called by sr_arpcache_timeout, which acquired
        the cache already for us. */
-    for (req = sr->cache.requests; req != NULL; ) {
-        struct sr_arpreq *next = req->next;     /* current req might get destroyed in sr_handle_arpreq */
+    for (req = sr->cache.requests; req != NULL;) {
+        struct sr_arpreq *next =
+            req->next; /* current req might get destroyed in sr_handle_arpreq */
         sr_handle_arpreq(sr, req);
         req = next;
     }
@@ -54,9 +55,9 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
  */
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
-void send_unreachable_icmp(struct sr_instance *sr, int type, int code, 
-                    sr_ip_hdr_t *pkt_ip, uint8_t *src_mac, uint8_t *dst_mac, 
-                    struct sr_if *interface) {
+void send_unreachable_icmp(struct sr_instance *sr, int type, int code,
+                           sr_ip_hdr_t *pkt_ip, uint8_t *src_mac,
+                           uint8_t *dst_mac, struct sr_if *interface) {
     int old_pkt_data = MIN(8, pkt_ip->ip_len - pkt_ip->ip_hl);
     /* Ethernet layer */
     sr_ethernet_hdr_t *ether = malloc(sizeof(sr_ethernet_hdr_t));
@@ -66,48 +67,46 @@ void send_unreachable_icmp(struct sr_instance *sr, int type, int code,
 
     /* IP layer, assuming we don't need to fragment the packets */
     sr_ip_hdr_t *ip = malloc(sizeof(sr_ip_hdr_t));
-    /* 
-    tos = 0b00000000 
+    /*
+    tos = 0b00000000
     routine, normal delay, normal throughput, normal reliability
     */
     ip->ip_v = 4;
     ip->ip_hl = sizeof(sr_ip_hdr_t) / 4;
-    ip->ip_tos = 0; 
-    ip->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t)
-                        + 4 + sizeof(sr_ip_hdr_t) + old_pkt_data); /* this is for original packet ip's header and its first 64 bits of data datagram*/
-    ip->ip_id = 0;      /* ip_id = 0b000, may fragment, last fragment*/
+    ip->ip_tos = 0;
+    ip->ip_len = htons(
+        sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t) + 4 + sizeof(sr_ip_hdr_t) +
+        old_pkt_data); /* this is for original packet ip's header and its first
+                          64 bits of data datagram*/
+    ip->ip_id = 0;     /* ip_id = 0b000, may fragment, last fragment*/
     ip->ip_off = 0;
-    ip->ip_ttl = 5;     /* assume time-to-live is 5 seconds */
-    ip->ip_p = 1;       /* https://datatracker.ietf.org/doc/html/rfc790 */
+    ip->ip_ttl = 5; /* assume time-to-live is 5 seconds */
+    ip->ip_p = 1;   /* https://datatracker.ietf.org/doc/html/rfc790 */
     ip->ip_src = interface->ip;
     ip->ip_dst = pkt_ip->ip_src;
     ip->ip_sum = cksum(ip, sizeof(sr_ip_hdr_t));
 
     /* ICMP layer */
-    int icmp_hdr_len = sizeof(sr_icmp_hdr_t) + 4 + sizeof(sr_ip_hdr_t) + old_pkt_data;
+    int icmp_hdr_len =
+        sizeof(sr_icmp_hdr_t) + 4 + sizeof(sr_ip_hdr_t) + old_pkt_data;
     sr_icmp_hdr_t *icmp = malloc(icmp_hdr_len);
     icmp->icmp_type = type;
     icmp->icmp_code = code;
-    
-    uint8_t *icmp_data = (uint8_t*)icmp;
-    memcpy(icmp_data + sizeof(sr_icmp_hdr_t) + 4, pkt_ip, sizeof(sr_ip_hdr_t));
-    memcpy(
-        icmp_data + sizeof(sr_icmp_hdr_t) + 4 + sizeof(sr_ip_hdr_t),
-        pkt_ip + 1,     /* skip through ip header section to ip datagram section*/
-        old_pkt_data
-    );
-    icmp->icmp_sum = cksum(icmp, icmp_hdr_len);
 
+    uint8_t *icmp_data = (uint8_t *)icmp;
+    memcpy(icmp_data + sizeof(sr_icmp_hdr_t) + 4, pkt_ip, sizeof(sr_ip_hdr_t));
+    memcpy(icmp_data + sizeof(sr_icmp_hdr_t) + 4 + sizeof(sr_ip_hdr_t),
+           pkt_ip +
+               1, /* skip through ip header section to ip datagram section*/
+           old_pkt_data);
+    icmp->icmp_sum = cksum(icmp, icmp_hdr_len);
 
     int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + icmp_hdr_len;
     uint8_t *packet = malloc(len);
     memcpy(packet, ether, sizeof(sr_ethernet_hdr_t));
     memcpy(packet + sizeof(sr_ethernet_hdr_t), ip, sizeof(sr_ip_hdr_t));
-    memcpy(
-        packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t),
-        icmp,
-        icmp_hdr_len
-    );
+    memcpy(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), icmp,
+           icmp_hdr_len);
     /* printf("I am sending ICMP packet with size %ld...\n", len);
     print_hdr_eth(packet);
     print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
@@ -131,29 +130,34 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
             for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
                 /* send ICMP host unreachable (type 3, code 1) */
                 uint8_t *buf = pkt->buf;
-                sr_ethernet_hdr_t *pkt_ether = (sr_ethernet_hdr_t*)buf;
-                sr_ip_hdr_t *pkt_ip = (sr_ip_hdr_t*)(buf + sizeof(sr_ethernet_hdr_t));
-                struct sr_rt *route = (struct sr_rt*)sr_get_matching_route(sr, pkt_ip->ip_src);
+                sr_ethernet_hdr_t *pkt_ether = (sr_ethernet_hdr_t *)buf;
+                sr_ip_hdr_t *pkt_ip =
+                    (sr_ip_hdr_t *)(buf + sizeof(sr_ethernet_hdr_t));
+                struct sr_rt *route =
+                    (struct sr_rt *)sr_get_matching_route(sr, pkt_ip->ip_src);
                 if (route == NULL) {
                     /* Packets are malformed */
                     fprintf(stderr, "IP is unrecognized in routing table!\n");
                     continue;
                 }
-                struct sr_if *interface = sr_get_interface(sr, route->interface);
+                struct sr_if *interface =
+                    sr_get_interface(sr, route->interface);
                 if (interface == NULL) {
                     fprintf(stderr, "Interface name is unrecognized\n");
                     continue;
                 }
                 unsigned char *if_mac = interface->addr;
                 uint8_t *dst_mac = pkt_ether->ether_shost;
-                
-                send_unreachable_icmp(sr, 3, 1, pkt_ip, if_mac, dst_mac, interface);
+
+                send_unreachable_icmp(sr, 3, 1, pkt_ip, if_mac, dst_mac,
+                                      interface);
             }
 
             sr_arpreq_destroy(&sr->cache, req);
         } else {
             /* send out ARP request */
-            struct sr_rt *route = (struct sr_rt*)sr_get_matching_route(sr, req->ip);
+            struct sr_rt *route =
+                (struct sr_rt *)sr_get_matching_route(sr, req->ip);
             struct sr_if *interface = sr_get_interface(sr, route->interface);
             if (interface == NULL) {
                 fprintf(stderr, "Interface name is unrecognized\n");
@@ -164,17 +168,19 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
             /* Ethernet layer */
             sr_ethernet_hdr_t *ether = malloc(sizeof(sr_ethernet_hdr_t));
             memcpy(ether->ether_shost, mac_addr, ETHER_ADDR_LEN);
-            memset(ether->ether_dhost, 0xff, ETHER_ADDR_LEN);   /* set to broadcast address*/
+            memset(ether->ether_dhost, 0xff,
+                   ETHER_ADDR_LEN); /* set to broadcast address*/
             ether->ether_type = htons(ethertype_arp);
 
             /* ARP layer */
             sr_arp_hdr_t *arp = malloc(sizeof(sr_arp_hdr_t));
             arp->ar_hrd = htons(arp_hrd_ethernet);
-            arp->ar_pro = htons(ethertype_ip);     /* I got this number from DeepSeek*/
+            arp->ar_pro =
+                htons(ethertype_ip); /* I got this number from DeepSeek*/
             arp->ar_hln = 6;
             arp->ar_pln = 4;
             arp->ar_op = htons(arp_op_request);
-            arp->ar_sip = interface->ip; 
+            arp->ar_sip = interface->ip;
             arp->ar_tip = req->ip;
             memcpy(arp->ar_sha, mac_addr, ETHER_ADDR_LEN);
             memset(arp->ar_tha, 0xff, ETHER_ADDR_LEN);
@@ -182,9 +188,10 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
             int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
             uint8_t *packet = malloc(len);
             memcpy(packet, ether, sizeof(sr_ethernet_hdr_t));
-            memcpy(packet + sizeof(sr_ethernet_hdr_t), arp, sizeof(sr_arp_hdr_t));
+            memcpy(packet + sizeof(sr_ethernet_hdr_t), arp,
+                   sizeof(sr_arp_hdr_t));
             sr_send_packet(sr, packet, len, interface->name);
-            
+
             req->times_sent += 1;
             req->sent = now;
             printf("Sent %d requests\n", req->times_sent);
