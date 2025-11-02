@@ -126,7 +126,7 @@ void sr_send_echo_reply(
 }
 
 /* Send an icmp packet given the router, type and code of icmp, and destination in network format.*/
-
+/* TODO delete if unsused */
 int sr_send_icmp_t0(struct sr_instance *sr, uint8_t type, uint8_t code, uint32_t dest_ip, char *interface) {
   int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
   uint8_t *packet = malloc(len);

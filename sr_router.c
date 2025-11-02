@@ -267,11 +267,11 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     if (is_ip_to_self(sr, iphdr->ip_dst) != NULL) {
       /* 5.2.3.1 Echo Response */
       if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 0) {
-        sr_send_icmp_t0(sr, 0, 0, iphdr->ip_src, NULL);
+        sr_send_echo_reply(sr, packet, len, interface);
       }
       /* 5.2.3.4 Traceroute supporting response */
       else if (ip_proto == ip_protocol_tcp || ip_proto == ip_protocol_udp) {
-        sr_send_icmp_t0(sr, 3, 3, iphdr->ip_src, NULL); /* TODO use type 3? */
+        sr_send_icmp_error(sr, packet, len, interface, SR_ICMP_PORT_UNREACHABLE);
       }
 
     } else {
@@ -279,7 +279,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       iphdr->ip_ttl -= 1;
       if (iphdr->ip_ttl <= 0) {
         /* 5.2.3.5 Time Exceeded Response*/
-        sr_send_icmp_t0(sr, 11, 0, iphdr->ip_src, NULL); /* TODO use type 3? */
+        sr_send_icmp_error(sr, packet, len, interface, SR_ICMP_TIME_EXCEEDED);
         return;
       }
 
