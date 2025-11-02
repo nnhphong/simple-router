@@ -131,31 +131,8 @@ struct sr_if *is_ip_to_self(struct sr_instance *sr, uint32_t packet_ip_addr) {
   return NULL;
 }
 
-/* TODO is this even required or is the packets crc handled in advance?*/
-uint32_t compute_eth_crc(uint8_t *packet, unsigned int len) { return 0; }
-
-/*---------------------------------------------------------------------
- * Method: sr_handlepacket(uint8_t* p,char* interface)
- * Scope:  Global
- *
- * This method is called each time the router receives a packet on the
- * interface.  The packet buffer, the packet length and the receiving
- * interface are passed in as parameters. The packet is complete with
- * ethernet headers.
- *
- * Note: Both the packet buffer and the character's memory are handled
- * by sr_vns_comm.c that means do NOT delete either.  Make a copy of the
- * packet instead if you intend to keep it around beyond the scope of
- * the method call.
- *
- *---------------------------------------------------------------------*/
-
-void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
+void test_code(struct sr_instance *sr, uint8_t *packet /* lent */,
                      unsigned int len, char *interface /* lent */) {
-  /* REQUIRES */
-  assert(sr);
-  assert(packet);
-  assert(interface);
 
   /* Beginning of test code */
   /* I was trying to create fake ARP requests for my router to send
@@ -196,6 +173,31 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
   sr_arpcache_queuereq(&sr->cache, inet_addr("192.168.2.2"), pkt, len,
                        interface); 
   /* End of test code */
+
+}
+
+/*---------------------------------------------------------------------
+ * Method: sr_handlepacket(uint8_t* p,char* interface)
+ * Scope:  Global
+ *
+ * This method is called each time the router receives a packet on the
+ * interface.  The packet buffer, the packet length and the receiving
+ * interface are passed in as parameters. The packet is complete with
+ * ethernet headers.
+ *
+ * Note: Both the packet buffer and the character's memory are handled
+ * by sr_vns_comm.c that means do NOT delete either.  Make a copy of the
+ * packet instead if you intend to keep it around beyond the scope of
+ * the method call.
+ *
+ *---------------------------------------------------------------------*/
+
+void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
+                     unsigned int len, char *interface /* lent */) {
+  /* REQUIRES */
+  assert(sr);
+  assert(packet);
+  assert(interface);
 
   /* Do not forget to keep ip addresses in network-byte order when handling
    * packet*/
