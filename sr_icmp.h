@@ -34,7 +34,15 @@ typedef struct sr_icmp_code sr_icmp_code_t;
   Function to send icmp errors of type 3 and 11.
   These also happen to be the only ones that the assignemnt requires.
 
-  No sanity checks in the code.
+  From RFC 792:
+    The ICMP messages typically report errors in the processing of
+    datagrams.  To avoid the infinite regress of messages about messages
+    etc., no ICMP messages are sent about ICMP messages.  Also ICMP
+    messages are only sent about errors in handling fragment zero of
+    fragemented datagrams.  (Fragment zero has the fragment offeset equal
+    zero).
+
+  The code will do those above sanity checks, but nothing else.
 */
 void sr_send_icmp_error(struct sr_instance *sr,
                         uint8_t *packet,

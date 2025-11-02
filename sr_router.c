@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "sr_arpcache.h"
+#include "sr_icmp.h"
 #include "sr_if.h"
 #include "sr_protocol.h"
 #include "sr_router.h"
@@ -155,7 +156,8 @@ int sr_route_and_send(struct sr_instance *sr, uint8_t *packet,
     struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
     
     if (rt_entry == NULL) {
-        /* ICMP Unreachable (type 3, code 0) */
+       /* ICMP Net Unreachable (type 3, code 0) */
+       sr_send_icmp_error(sr, packet, len, interface, SR_ICMP_NET_UNREACHABLE);
        return -1;
     }
 

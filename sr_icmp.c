@@ -20,6 +20,10 @@ void sr_send_icmp_error(
    struct sr_ip_hdr *old_ip =
        (struct sr_ip_hdr *)(packet +
                             sizeof(struct sr_ethernet_hdr));
+
+   /* do not send error if its ICMP message, or offset is not 0*/
+   if (old_ip->ip_p == ip_protocol_icmp || ntohs(old_ip->ip_off) & IP_OFFMASK)
+     return;
    
    uint8_t new_pkt[SR_ICMP_T3_FRAME_LEN];
    struct sr_ip_hdr *new_ip =
