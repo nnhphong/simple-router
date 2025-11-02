@@ -55,38 +55,7 @@ void sr_init(struct sr_instance *sr) {
 } /* -- sr_init -- */
 
 
-/* Send an icmp packet given the router, type and code of icmp, and destination in network format.*/
 
-int sr_send_icmp_t0(struct sr_instance *sr, uint8_t type, uint8_t code, uint32_t dest_ip, char *interface) {
-  int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
-  uint8_t *packet = malloc(len);
-
-  /* ethernet header is configured by sr_route_and_send */
-  /* Configure the IP header - sum and src are found in sr_route_and_send */
-  sr_ip_hdr_t *iph = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-  iph->ip_hl = sizeof(sr_ip_hdr_t) / 4;
-  iph->ip_v = 4;
-  iph->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
-  iph->ip_tos = 0; /* Best effort / non-configured */
-  iph->ip_id = 0;
-  iph->ip_off = 0;
-  iph->ip_ttl = 255;
-  iph->ip_p = 1; /* https://www.rfc-editor.org/rfc/rfc790 page 6 */
-  iph->ip_dst = dest_ip;
-
-  sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-  icmp_hdr->icmp_type = type;
-  icmp_hdr->icmp_code = code;
-  /* TODO Not sure about this cksum, does ICMP have a payload? */
-  icmp_hdr->icmp_sum = 0;
-  icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t));
-
-  int res = sr_route_and_send(sr, packet, len, interface);
-  
-  free(packet);
-
-  return res;
-}
 
 
 
@@ -99,7 +68,7 @@ int sr_send_icmp_t0(struct sr_instance *sr, uint8_t type, uint8_t code, uint32_t
    do not give this function a frame with malformed IP header.
    optionally set the ip 
 */
-int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface) {
+int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len, int set_ip, char *interface) {
   uint32_t dest_ip =
       ntohl(*(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
                           offsetof(struct sr_ip_hdr, ip_dst)));
@@ -115,6 +84,15 @@ int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
      /* yeah... idk man */
      fprintf(stderr, "Could not find exit interface\n");
      return -2;
+  }
+
+    /* Set the packets source to the outgoing interfaces IP */
+  if (set_ip) {
+    sr_ip_hdr_t *iph = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+    iph->ip_src = htonl(out_iface->ip);
+    /* Recompute checksum */
+    iph->ip_sum = 0;
+    iph->ip_sum = cksum(iph, sizeof(sr_ip_hdr_t));
   }
 
   uint32_t hop_ip = rt_entry->gw.s_addr;
@@ -289,11 +267,11 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     if (is_ip_to_self(sr, iphdr->ip_dst) != NULL) {
       /* 5.2.3.1 Echo Response */
       if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 0) {
-        sr_send_icmp_t0(sr, 0, 0, iphdr->ip_src);
+        sr_send_icmp_t0(sr, 0, 0, iphdr->ip_src, NULL);
       }
       /* 5.2.3.4 Traceroute supporting response */
       else if (ip_proto == ip_protocol_tcp || ip_proto == ip_protocol_udp) {
-        sr_send_icmp_t0(sr, 3, 3, iphdr->ip_src); /* TODO use type 3? */
+        sr_send_icmp_t0(sr, 3, 3, iphdr->ip_src, NULL); /* TODO use type 3? */
       }
 
     } else {
@@ -301,7 +279,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       iphdr->ip_ttl -= 1;
       if (iphdr->ip_ttl <= 0) {
         /* 5.2.3.5 Time Exceeded Response*/
-        sr_send_icmp_t0(sr, 11, 0, iphdr->ip_src); /* TODO use type 3? */
+        sr_send_icmp_t0(sr, 11, 0, iphdr->ip_src, NULL); /* TODO use type 3? */
         return;
       }
 
@@ -310,7 +288,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       iphdr->ip_sum = cksum(iphdr, sizeof(sr_ip_hdr_t));
 
       /* Forward the packet */
-      sr_route_and_send(sr, packet, len, interface);
+      sr_route_and_send(sr, packet, len, 0, interface);
 
     }
 
