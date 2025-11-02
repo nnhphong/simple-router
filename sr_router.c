@@ -20,6 +20,7 @@
 
 #include "sr_icmp.h"
 #include "sr_arpcache.h"
+#include "sr_icmp.h"
 #include "sr_if.h"
 #include "sr_protocol.h"
 #include "sr_router.h"
@@ -54,6 +55,41 @@ void sr_init(struct sr_instance *sr) {
 } /* -- sr_init -- */
 
 
+/* Send an icmp packet given the router, type and code of icmp, and destination in network format.*/
+
+int sr_send_icmp_t0(struct sr_instance *sr, uint8_t type, uint8_t code, uint32_t dest_ip, char *interface) {
+  int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+  uint8_t *packet = malloc(len);
+
+  /* ethernet header is configured by sr_route_and_send */
+  /* Configure the IP header - sum and src are found in sr_route_and_send */
+  sr_ip_hdr_t *iph = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+  iph->ip_hl = sizeof(sr_ip_hdr_t) / 4;
+  iph->ip_v = 4;
+  iph->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
+  iph->ip_tos = 0; /* Best effort / non-configured */
+  iph->ip_id = 0;
+  iph->ip_off = 0;
+  iph->ip_ttl = 255;
+  iph->ip_p = 1; /* https://www.rfc-editor.org/rfc/rfc790 page 6 */
+  iph->ip_dst = dest_ip;
+
+  sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+  icmp_hdr->icmp_type = type;
+  icmp_hdr->icmp_code = code;
+  /* TODO Not sure about this cksum, does ICMP have a payload? */
+  icmp_hdr->icmp_sum = 0;
+  icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t));
+
+  int res = sr_route_and_send(sr, packet, len, interface);
+  
+  free(packet);
+
+  return res;
+}
+
+
+
 /* takes in a dummy ethernet frame with a real IP packet, routes it and sends
    it.
    REQUIRES sizeof(struct sr_ethernet_hdr) free bytes before the IP header.
@@ -63,34 +99,22 @@ void sr_init(struct sr_instance *sr) {
    do not give this function a frame with malformed IP header.
    optionally set the ip 
 */
-int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len, int set_ip) {
+int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface) {
   uint32_t dest_ip =
       ntohl(*(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
                           offsetof(struct sr_ip_hdr, ip_dst)));
   struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
 
   if (rt_entry == NULL) {
-    /* TODO if route DNE send icmp 'route non-existing packet' 5.2.3.2 */
-    /* ICMP Unreachable (type 3, code 0) */
-    uint32_t src_ip = *(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) + offsetof(struct sr_ip_hdr, ip_src));
-    /*sr_send_icmp(sr, 3, 0, src_ip); USE T3 sender*/
-    return -1;
+     sr_send_icmp_error(sr, packet, len, interface, SR_ICMP_NET_UNREACHABLE);
+     return -1;
   }
 
   struct sr_if *out_iface = sr_get_interface(sr, rt_entry->interface);
   if (out_iface == NULL) {
-    /* yeah... idk man */
-    fprintf(stderr, "Could not find exit interface\n");
-    return -2;
-  }
-
-  /* Set the packets source to the outgoing interfaces IP */
-  if (set_ip) {
-    sr_ip_hdr_t *iph = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
-    iph->ip_src = htonl(out_iface->ip);
-    /* Recompute checksum */
-    iph->ip_sum = 0;
-    iph->ip_sum = cksum(iph, sizeof(sr_ip_hdr_t));
+     /* yeah... idk man */
+     fprintf(stderr, "Could not find exit interface\n");
+     return -2;
   }
 
   uint32_t hop_ip = rt_entry->gw.s_addr;
@@ -286,7 +310,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       iphdr->ip_sum = cksum(iphdr, sizeof(sr_ip_hdr_t));
 
       /* Forward the packet */
-      sr_route_and_send(sr, packet, len, 0);
+      sr_route_and_send(sr, packet, len, interface);
 
     }
 
