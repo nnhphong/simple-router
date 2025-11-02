@@ -3,7 +3,7 @@
  * Author:  Ning Qi Sun
  * Description:
  *
- * Functions to send ICMP messages (pretty much only the errors though)
+ * Functions to send ICMP messages.
  *
  *---------------------------------------------------------------------------*/
 
@@ -13,25 +13,44 @@
 #include "sr_if.h"
 #include <stdint.h>
 
+/* ICMP type/code pair struct */
+struct sr_icmp_code {
+    uint8_t type;
+    uint8_t code;
+};
+typedef struct sr_icmp_code sr_icmp_code_t;
+
 /*
-  Function to send icmp messages, specifically icmp errors
-  (type 3, and type 11)
- */
+  theres more than just these, but these are the only ones
+  relevant for the assignment
+*/
+#define SR_ICMP_ECHO_REPLY        (struct sr_icmp_code){0, 0}
+#define SR_ICMP_NET_UNREACHABLE   (struct sr_icmp_code){3, 0}
+#define SR_ICMP_HOST_UNREACHABLE  (struct sr_icmp_code){3, 1}
+#define SR_ICMP_PORT_UNREACHABLE  (struct sr_icmp_code){3, 3}
+#define SR_ICMP_TIME_EXCEEDED     (struct sr_icmp_code){11, 0}
+
+/*
+  Function to send icmp errors of type 3 and 11.
+  These also happen to be the only ones that the assignemnt requires.
+
+  No sanity checks in the code.
+*/
 void sr_send_icmp_error(struct sr_instance *sr,
                         uint8_t *packet,
                         unsigned int len,
                         char *interface,
-                        int type,
-                        int code);
+                        struct sr_icmp_code code);
 
 /*
-  Function that sends ICMP echo reply
- */
-void sr_echo_reply(struct sr_instance *sr,
-                   uint8_t packet,
-                   unsigned int len,
-                   char *interface,
-                   int type,
-                   int code);
+  Function that sends ICMP echo reply.
+  
+  Will do a quick sanity check that ip_p is ip_protocol_icmp,
+  and icmp_type is 8, but nothing else.
+*/
+void sr_send_echo_reply(struct sr_instance *sr,
+                        uint8_t *packet,
+                        unsigned int len,
+                        char *interface);
 
 #endif /* SR_ICMP_H */

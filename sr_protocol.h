@@ -87,7 +87,6 @@ struct sr_icmp_hdr {
 } __attribute__ ((packed)) ;
 typedef struct sr_icmp_hdr sr_icmp_hdr_t;
 
-
 /* Structure of a type3 ICMP header
  */
 struct sr_icmp_t3_hdr {
@@ -101,8 +100,9 @@ struct sr_icmp_t3_hdr {
 } __attribute__ ((packed)) ;
 typedef struct sr_icmp_t3_hdr sr_icmp_t3_hdr_t;
 
-
-
+#define SR_ICMP_T3_FRAME_LEN (sizeof(struct sr_ethernet_hdr) + \
+                           sizeof(struct sr_ip_hdr) +       \
+                           sizeof(struct sr_icmp_t3_hdr))
 
 /*
  * Structure of an internet header, naked of options.
@@ -181,6 +181,9 @@ struct sr_arp_hdr
     uint32_t        ar_tip;             /* target IP address            */
 } __attribute__ ((packed)) ;
 typedef struct sr_arp_hdr sr_arp_hdr_t;
+
+#define SR_ARP_FRAME_LEN (sizeof(struct sr_ethernet_hdr) +  \
+                          sizeof(struct sr_arp_hdr))
 
 #define sr_IFACE_NAMELEN 32
 
