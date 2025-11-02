@@ -300,8 +300,8 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       /* TODO IP address is this router.. handle echos but what else?*/
 
       /* 5.2.3.1 Echo Response */
-      if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 0) { /* ntoh? */
-        /* TODO send echo response */
+      if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 0) {
+        sr_send_icmp_t0(sr, 0, 0, iphdr->ip_src);
       }
       /* 5.2.3.4 Traceroute supporting response */
       else if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 3 && icmphdr->icmp_code == 3) {
