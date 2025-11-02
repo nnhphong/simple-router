@@ -163,7 +163,7 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
             arp->ar_sip = interface->ip;
             arp->ar_tip = req->ip;
             memcpy(arp->ar_sha, mac_addr, ETHER_ADDR_LEN);
-            memset(arp->ar_tha, 0x3f, ETHER_ADDR_LEN);
+            memset(arp->ar_tha, 0xff, ETHER_ADDR_LEN);
 
             sr_send_packet(sr, packet, SR_ARP_FRAME_LEN, interface->name);
             
