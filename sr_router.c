@@ -304,8 +304,8 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
         sr_send_icmp_t0(sr, 0, 0, iphdr->ip_src);
       }
       /* 5.2.3.4 Traceroute supporting response */
-      else if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 3 && icmphdr->icmp_code == 3) {
-        /* TODO send port unreachable */
+      else if (ip_proto == ip_protocol_tcp || ip_proto == ip_protocol_udp) {
+        sr_send_icmp_t0(sr, 3, 3, iphdr->ip_src); /* TODO use type 3? */
       }
 
     } else {
