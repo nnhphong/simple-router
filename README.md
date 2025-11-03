@@ -122,3 +122,8 @@ Defined in `sr_rt.c`
   - Longest prefix match routing: `sr_rt.c/sr_get_matching_route()`
   - Packet forwarding: `sr_router.c/sr_route_and_send()`
   - Sending ICMP messages: `sr_icmp.c/sr_send_icmp_error()`, `sr_icmp.c/sr_send_echo_reply()`
+
+- [**Jeremy Janella**](https://github.com/jjanella)
+  - Handling IP & ICMP packets: `sr_router.c/sr_handlepacket()`
+  - Checking IP dest: `is_ip_to_self()`
+  - Early versions of sending ICMP messages
