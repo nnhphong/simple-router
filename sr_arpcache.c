@@ -344,8 +344,5 @@ void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode op_code, uint32_t de
         memcpy(arp->ar_tha, dest_mac_addr, ETHER_ADDR_LEN);
     }
 
-    print_hdr_eth(packet);
-    print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));
-
     sr_send_packet(sr, packet, SR_ARP_FRAME_LEN, interface->name);
 }

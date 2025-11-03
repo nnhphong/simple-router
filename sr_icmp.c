@@ -61,7 +61,6 @@ void sr_send_icmp_error(
    new_ip->ip_sum = 0;
    new_ip->ip_sum = cksum(new_ip, sizeof(*new_ip));
 
-   print_addr_ip_int(old_ip->ip_src);
    /*
      ICMP, just fill in type, code, and copy the 28 bytes into DATA:
 
