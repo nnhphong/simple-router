@@ -20,7 +20,7 @@ void sr_send_icmp_error(
    struct sr_ip_hdr *old_ip =
        (struct sr_ip_hdr *)(packet +
                             sizeof(struct sr_ethernet_hdr));
-
+   printf("Im sending bomboclat ICMP... %d %d\n", code.code, code.type);
    /* do not send error if its ICMP message, or offset is not 0*/
    if (old_ip->ip_p == ip_protocol_icmp || ntohs(old_ip->ip_off) & IP_OFFMASK)
      return;

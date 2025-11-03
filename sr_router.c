@@ -123,7 +123,6 @@ int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
   eth_hdr->ether_type = htons(ethertype_ip);
 
   struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), hop_ip);
-  sr_arpcache_dump(&(sr->cache));
   if (arp_entry != NULL) {
     memcpy(eth_hdr->ether_dhost, arp_entry->mac, 6);
     sr_send_packet(sr, packet, len, rt_entry->interface);
@@ -242,7 +241,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
         fprintf(stderr, "ICMP packet too short\n");
         return;
       }
-      print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+      /* print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); */
       icmphdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) +
                                   sizeof(sr_ip_hdr_t));
     }
@@ -273,7 +272,6 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       iphdr->ip_sum = cksum(iphdr, sizeof(sr_ip_hdr_t));
 
       /* Forward the packet */
-      printf("im forwarding muahahah\n");
       sr_route_and_send(sr, packet, len, interface);
 
     }
@@ -293,8 +291,23 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     */
     sr_ethernet_hdr_t ethhdr = *(sr_ethernet_hdr_t *)packet;
     sr_arp_hdr_t arphdr = *(sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
-    if (arphdr.ar_op == arp_op_reply) {
-        sr_arpcache_insert(&sr->cache, ethhdr.ether_shost, arphdr.ar_sip);
+    if (ntohs(arphdr.ar_op) == arp_op_reply) {
+        struct sr_arpreq *req = sr_arpcache_insert(&sr->cache, ethhdr.ether_shost, arphdr.ar_sip);
+        /* loop through ARP's requests */
+        
+        struct sr_packet *pkt;
+        for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
+            printf("Sending out after ARP..\n");
+            
+            print_hdr_eth(pkt->buf);
+            print_hdr_ip(pkt->buf + sizeof(sr_ethernet_hdr_t));
+            print_hdr_icmp(pkt->buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+            sr_ethernet_hdr_t *pkt_ethhdr = (sr_ethernet_hdr_t*)(pkt->buf);
+            memcpy(pkt_ethhdr->ether_dhost, ethhdr.ether_shost, 6);
+            sr_route_and_send(sr, pkt->buf, pkt->len, interface);
+        }
+        sr_arpreq_destroy(&(sr->cache), req);
+        sr_arpcache_dump(&(sr->cache));
     }
     else if (is_ip_to_self(sr, arphdr.ar_tip)) {  
         /* Send out ARP reply */

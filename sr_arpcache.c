@@ -134,7 +134,6 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
                   sr, pkt->buf, pkt->len, pkt->iface,
                   SR_ICMP_HOST_UNREACHABLE
                );
-
             sr_arpreq_destroy(&sr->cache, req);
         } else {
             /* send out ARP request */
