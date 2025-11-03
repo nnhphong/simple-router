@@ -73,7 +73,6 @@ int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
       *(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
                           offsetof(struct sr_ip_hdr, ip_dst));
   struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
-  print_addr_ip_int(dest_ip);
 
   if (rt_entry == NULL) {
      sr_send_icmp_error(sr, packet, len, interface, SR_ICMP_NET_UNREACHABLE);
@@ -198,7 +197,6 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       fprintf(stderr, "IP packet too short\n");
       return;
     }
-    /*print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));*/
 
     sr_ip_hdr_t *iphdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
     print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t)); 
@@ -228,7 +226,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
 
     if (is_ip_to_self(sr, iphdr->ip_dst) != NULL) {
       /* 5.2.3.1 Echo Response */
-      if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 0) {
+      if (ip_proto == ip_protocol_icmp && icmphdr->icmp_type == 8) {
         sr_send_echo_reply(sr, packet, len, interface);
       }
       /* 5.2.3.4 Traceroute supporting response */
@@ -281,7 +279,6 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
             sr_route_and_send(sr, pkt->buf, pkt->len, 0, interface);
         }
         sr_arpreq_destroy(&(sr->cache), req);
-        sr_arpcache_dump(&(sr->cache));
     }
     else if (is_ip_to_self(sr, arphdr.ar_tip)) {  
         /* Send out ARP reply */
