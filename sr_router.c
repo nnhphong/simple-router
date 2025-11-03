@@ -278,7 +278,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
         for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
             struct sr_ethernet_hdr *pkt_eth = (struct sr_ethernet_hdr *)pkt->buf;
             memcpy(pkt_eth->ether_dhost, arphdr.ar_sha, ETHER_ADDR_LEN);
-            sr_route_and_send(sr, pkt->buf, pkt->len, interface);
+            sr_route_and_send(sr, pkt->buf, pkt->len, 0, interface);
         }
         sr_arpreq_destroy(&(sr->cache), req);
         sr_arpcache_dump(&(sr->cache));
