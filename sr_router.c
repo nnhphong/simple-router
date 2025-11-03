@@ -237,13 +237,13 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       }
 
     } else {
-      /* 5.1.2 Decrement TTL and return if 0 */
-      iphdr->ip_ttl -= 1;
-      if (iphdr->ip_ttl <= 0) {
+      /* 5.1.2 Decrement TTL or return if <= 1 */
+      if (iphdr->ip_ttl <= 1) {
         /* 5.2.3.5 Time Exceeded Response*/
         sr_send_icmp_error(sr, packet, len, interface, SR_ICMP_TIME_EXCEEDED);
         return;
       }
+      iphdr->ip_ttl -= 1;
 
       /* Update checksum with TTL decremented */
       iphdr->ip_sum = 0;
