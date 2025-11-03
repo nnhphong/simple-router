@@ -103,6 +103,7 @@ int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
       *(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
                           offsetof(struct sr_ip_hdr, ip_dst));
   struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
+  print_addr_ip_int(dest_ip);
 
   if (rt_entry == NULL) {
      sr_send_icmp_error(sr, packet, len, interface, SR_ICMP_NET_UNREACHABLE);
@@ -124,10 +125,12 @@ int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len,
 
   struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), hop_ip);
   if (arp_entry != NULL) {
+     printf("No ARPing needed...\n");
     memcpy(eth_hdr->ether_dhost, arp_entry->mac, 6);
     sr_send_packet(sr, packet, len, rt_entry->interface);
     free(arp_entry);
   } else {
+     printf("ARPing...\n");
     /* No entry for this IP, ARP for it, and queue this packet. */
     struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), hop_ip, packet,
                                                  len, rt_entry->interface);
@@ -292,21 +295,24 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     sr_ethernet_hdr_t ethhdr = *(sr_ethernet_hdr_t *)packet;
     sr_arp_hdr_t arphdr = *(sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
     if (ntohs(arphdr.ar_op) == arp_op_reply) {
-        struct sr_arpreq *req = sr_arpcache_insert(&sr->cache, ethhdr.ether_shost, arphdr.ar_sip);
-        /* loop through ARP's requests */
+        struct sr_arpreq *req = sr_arpcache_insert(&sr->cache, arphdr.ar_sha, arphdr.ar_sip);
+
+        if (req == NULL) return;
+        printf("ARP reply received, sending out packets queued...\n");
         
         struct sr_packet *pkt;
         for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
-            printf("Sending out after ARP..\n");
-            
             print_hdr_eth(pkt->buf);
             print_hdr_ip(pkt->buf + sizeof(sr_ethernet_hdr_t));
             print_hdr_icmp(pkt->buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-            sr_ethernet_hdr_t *pkt_ethhdr = (sr_ethernet_hdr_t*)(pkt->buf);
-            memcpy(pkt_ethhdr->ether_dhost, ethhdr.ether_shost, 6);
+            struct sr_ethernet_hdr *pkt_eth = (struct sr_ethernet_hdr *)pkt->buf;
+
+            memcpy(pkt_eth->ether_dhost, arphdr.ar_sha, ETHER_ADDR_LEN);
+            
             sr_route_and_send(sr, pkt->buf, pkt->len, interface);
         }
         sr_arpreq_destroy(&(sr->cache), req);
+        printf("Done sending out packets queued on ARP request...\n");
         sr_arpcache_dump(&(sr->cache));
     }
     else if (is_ip_to_self(sr, arphdr.ar_tip)) {  
