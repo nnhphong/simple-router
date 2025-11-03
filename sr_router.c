@@ -132,9 +132,6 @@ struct sr_if *is_ip_to_self(struct sr_instance *sr, uint32_t packet_ip_addr) {
   return NULL;
 }
 
-/* TODO is this even required or is the packets crc handled in advance?*/
-uint32_t compute_eth_crc(uint8_t *packet, unsigned int len) { return 0; }
-
 /*---------------------------------------------------------------------
  * Method: sr_handlepacket(uint8_t* p,char* interface)
  * Scope:  Global
