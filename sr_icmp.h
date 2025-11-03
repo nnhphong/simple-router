@@ -25,6 +25,7 @@ typedef struct sr_icmp_code sr_icmp_code_t;
   relevant for the assignment
 */
 #define SR_ICMP_ECHO_REPLY        (struct sr_icmp_code){0, 0}
+#define SR_ICMP_ECHO_REQUEST      (struct sr_icmp_code){8, 0}
 #define SR_ICMP_NET_UNREACHABLE   (struct sr_icmp_code){3, 0}
 #define SR_ICMP_HOST_UNREACHABLE  (struct sr_icmp_code){3, 1}
 #define SR_ICMP_PORT_UNREACHABLE  (struct sr_icmp_code){3, 3}
@@ -34,7 +35,7 @@ typedef struct sr_icmp_code sr_icmp_code_t;
   Function to send icmp errors of type 3 and 11.
   These also happen to be the only ones that the assignemnt requires.
 
-  From RFC 792:
+  Important (from RFC 792):
     The ICMP messages typically report errors in the processing of
     datagrams.  To avoid the infinite regress of messages about messages
     etc., no ICMP messages are sent about ICMP messages.  Also ICMP
@@ -53,14 +54,12 @@ void sr_send_icmp_error(struct sr_instance *sr,
 /*
   Function that sends ICMP echo reply.
   
-  Will do a quick sanity check that ip_p is ip_protocol_icmp,
-  and icmp_type is 8, but nothing else.
+  Will do a quick sanity check that ip protocol says ICMP,
+  and the icmp header has type 8.
 */
 void sr_send_echo_reply(struct sr_instance *sr,
                         uint8_t *packet,
                         unsigned int len,
                         char *interface);
-
-int sr_send_icmp_t0(struct sr_instance *, uint8_t, uint8_t, uint32_t, char *);
 
 #endif /* SR_ICMP_H */

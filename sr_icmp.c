@@ -4,9 +4,9 @@
 #include "sr_protocol.h"
 #include "sr_router.h"
 #include "sr_utils.h"
-#include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 void sr_send_icmp_error(
    struct sr_instance *sr,
@@ -16,7 +16,6 @@ void sr_send_icmp_error(
    struct sr_icmp_code code
 ) {
    struct sr_if *iface = sr_get_interface(sr, interface);
-   /* struct sr_ethernet_hdr *old_eth = (struct sr_ethernet_hdr *)packet; */
    struct sr_ip_hdr *old_ip =
        (struct sr_ip_hdr *)(packet +
                             sizeof(struct sr_ethernet_hdr));
@@ -28,11 +27,12 @@ void sr_send_icmp_error(
                                 sizeof(struct sr_ethernet_hdr) +
                                 sizeof(struct sr_ip_hdr));
 
-      if (!(old_icmp->icmp_type == 8 || old_icmp->icmp_type == 0)) /* only allow echo */
+      if (!(old_icmp->icmp_type == SR_ICMP_ECHO_REQUEST.type ||
+            old_icmp->icmp_type == SR_ICMP_ECHO_REPLY.type)) /* only allow ping */
          return;
    }
    
-   if (ntohs(old_ip->ip_off) & IP_OFFMASK != 0)
+   if (ntohs(old_ip->ip_off) & (IP_OFFMASK != 0))
       return;
    
    uint8_t new_pkt[SR_ICMP_T3_FRAME_LEN];
@@ -116,6 +116,7 @@ void sr_send_echo_reply(
                              sizeof(struct sr_ip_hdr));
 
    /* Ethernet fields will be handled by route_and_send */
+   
    /* IP header for ICMP echo reply is just the same, but swap IPs. */
    uint32_t tmp_ip = new_ip->ip_src;
    new_ip->ip_src = new_ip->ip_dst;
@@ -133,37 +134,4 @@ void sr_send_echo_reply(
 
    sr_route_and_send(sr, new_pkt, len, 0, interface);
    free(new_pkt);
-}
-
-/* Send an icmp packet given the router, type and code of icmp, and destination in network format.*/
-/* TODO delete if unsused */
-int sr_send_icmp_t0(struct sr_instance *sr, uint8_t type, uint8_t code, uint32_t dest_ip, char *interface) {
-  int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
-  uint8_t *packet = malloc(len);
-
-  /* ethernet header is configured by sr_route_and_send */
-  /* Configure the IP header - sum and src are found in sr_route_and_send */
-  sr_ip_hdr_t *iph = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-  iph->ip_hl = sizeof(sr_ip_hdr_t) / 4;
-  iph->ip_v = 4;
-  iph->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
-  iph->ip_tos = 0; /* Best effort / non-configured */
-  iph->ip_id = 0;
-  iph->ip_off = 0;
-  iph->ip_ttl = 255;
-  iph->ip_p = 1; /* https://www.rfc-editor.org/rfc/rfc790 page 6 */
-  iph->ip_dst = dest_ip;
-
-  sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-  icmp_hdr->icmp_type = type;
-  icmp_hdr->icmp_code = code;
-  /* TODO Not sure about this cksum, does ICMP have a payload? */
-  icmp_hdr->icmp_sum = 0;
-  icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t));
-
-  int res = sr_route_and_send(sr, packet, len, 1, interface);
-  
-  free(packet);
-
-  return res;
 }

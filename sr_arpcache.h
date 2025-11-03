@@ -75,35 +75,35 @@
 #define SR_ARPCACHE_TO 15.0
 
 struct sr_packet {
-    uint8_t *buf; /* A raw Ethernet frame, presumably with the dest MAC empty */
-    unsigned int len; /* Length of raw Ethernet frame */
-    char *iface;      /* The outgoing interface */
-    struct sr_packet *next;
+   uint8_t *buf; /* A raw Ethernet frame, presumably with the dest MAC empty */
+   unsigned int len; /* Length of raw Ethernet frame */
+   char *iface;      /* The outgoing interface */
+   struct sr_packet *next;
 };
 
 struct sr_arpentry {
-    unsigned char mac[6];
-    uint32_t ip; /* IP addr in network byte order */
-    time_t added;
-    int valid;
+   unsigned char mac[6];
+   uint32_t ip; /* IP addr in network byte order */
+   time_t added;
+   int valid;
 };
 
 struct sr_arpreq {
-    uint32_t ip;
-    time_t sent;               /* Last time this ARP request was sent. You
-                                  should update this. If the ARP request was
-                                  never sent, will be 0. */
-    uint32_t times_sent;       /* Number of times this request was sent. You
-                                  should update this. */
-    struct sr_packet *packets; /* List of pkts waiting on this req to finish */
-    struct sr_arpreq *next;
+   uint32_t ip;
+   time_t sent;               /* Last time this ARP request was sent. You
+                                 should update this. If the ARP request was
+                                 never sent, will be 0. */
+   uint32_t times_sent;       /* Number of times this request was sent. You
+                                 should update this. */
+   struct sr_packet *packets; /* List of pkts waiting on this req to finish */
+   struct sr_arpreq *next;
 };
 
 struct sr_arpcache {
-    struct sr_arpentry entries[SR_ARPCACHE_SZ];
-    struct sr_arpreq *requests;
-    pthread_mutex_t lock;
-    pthread_mutexattr_t attr;
+   struct sr_arpentry entries[SR_ARPCACHE_SZ];
+   struct sr_arpreq *requests;
+   pthread_mutex_t lock;
+   pthread_mutexattr_t attr;
 };
 
 /*
@@ -163,6 +163,7 @@ void sr_arpcache_dump(struct sr_arpcache *cache);
 int sr_arpcache_init(struct sr_arpcache *cache);
 int sr_arpcache_destroy(struct sr_arpcache *cache);
 void *sr_arpcache_timeout(void *cache_ptr);
-void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode op_code, uint32_t tip, unsigned char *dest_mac_addr);
+void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode op_code,
+                 uint32_t tip, unsigned char *dest_mac_addr);
 
 #endif

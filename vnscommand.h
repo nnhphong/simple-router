@@ -25,8 +25,8 @@
   ---------------------------------------------------------------------------*/
 
 typedef struct {
-    uint32_t mLen;
-    uint32_t mType;
+   uint32_t mLen;
+   uint32_t mType;
 } __attribute__((__packed__)) c_base;
 
 /*-----------------------------------------------------------------------------
@@ -35,14 +35,14 @@ typedef struct {
 
 typedef struct {
 
-    uint32_t mLen;
-    uint32_t mType;              /* = VNSOPEN */
-    uint16_t topoID;             /* Id of the topology we want to run on */
-    uint16_t pad;                /* unused */
-    char mVirtualHostID[IDSIZE]; /* Id of the simulated router (e.g.
-                                    'VNS-A'); */
-    char mUID[IDSIZE]; /* User id (e.g. "appenz"), for information only */
-    char mPass[IDSIZE];
+   uint32_t mLen;
+   uint32_t mType;              /* = VNSOPEN */
+   uint16_t topoID;             /* Id of the topology we want to run on */
+   uint16_t pad;                /* unused */
+   char mVirtualHostID[IDSIZE]; /* Id of the simulated router (e.g.
+                                   'VNS-A'); */
+   char mUID[IDSIZE]; /* User id (e.g. "appenz"), for information only */
+   char mPass[IDSIZE];
 
 } __attribute__((__packed__)) c_open;
 
@@ -52,9 +52,9 @@ typedef struct {
 
 typedef struct {
 
-    uint32_t mLen;
-    uint32_t mType;
-    char mErrorMessage[256];
+   uint32_t mLen;
+   uint32_t mType;
+   char mErrorMessage[256];
 
 } __attribute__((__packed__)) c_close;
 
@@ -64,8 +64,8 @@ typedef struct {
 
 typedef struct {
 
-    uint32_t mLen;
-    uint32_t mType;
+   uint32_t mLen;
+   uint32_t mType;
 
 } __attribute__((__packed__)) c_hwrequest;
 
@@ -75,9 +75,9 @@ typedef struct {
 
 typedef struct {
 
-    uint32_t mLen;
-    uint32_t mType;
-    char mBannerMessage[256];
+   uint32_t mLen;
+   uint32_t mType;
+   char mBannerMessage[256];
 
 } __attribute__((__packed__)) c_banner;
 
@@ -86,19 +86,19 @@ typedef struct {
   ---------------------------------------------------------------------------*/
 
 typedef struct {
-    uint32_t mLen;
-    uint32_t mType;
-    char mInterfaceName[16];
-    uint8_t ether_dhost[6];
-    uint8_t ether_shost[6];
-    uint16_t ether_type;
+   uint32_t mLen;
+   uint32_t mType;
+   char mInterfaceName[16];
+   uint8_t ether_dhost[6];
+   uint8_t ether_shost[6];
+   uint16_t ether_type;
 
 } __attribute__((__packed__)) c_packet_ethernet_header;
 
 typedef struct {
-    uint32_t mLen;
-    uint32_t mType;
-    char mInterfaceName[16];
+   uint32_t mLen;
+   uint32_t mType;
+   char mInterfaceName[16];
 } __attribute__((__packed__)) c_packet_header;
 
 /*-----------------------------------------------------------------------------
@@ -115,15 +115,15 @@ typedef struct {
 #define HWMASK 128
 
 typedef struct {
-    uint32_t mKey;
-    char value[32];
+   uint32_t mKey;
+   char value[32];
 } __attribute__((__packed__)) c_hw_entry;
 
 typedef struct {
 #define MAXHWENTRIES 256
-    uint32_t mLen;
-    uint32_t mType;
-    c_hw_entry mHWInfo[MAXHWENTRIES];
+   uint32_t mLen;
+   uint32_t mType;
+   c_hw_entry mHWInfo[MAXHWENTRIES];
 } __attribute__((__packed__)) c_hwinfo;
 
 /* ******* New VNS Messages ******** */
@@ -135,49 +135,49 @@ typedef struct {
 
 /* rtable */
 typedef struct {
-    uint32_t mLen;
-    uint32_t mType;
-    char mVirtualHostID[IDSIZE];
-    char rtable[0];
+   uint32_t mLen;
+   uint32_t mType;
+   char mVirtualHostID[IDSIZE];
+   char rtable[0];
 } __attribute__((__packed__)) c_rtable;
 
 /* open template */
 typedef struct {
-    uint32_t ip;
-    uint8_t num_masked_bits;
+   uint32_t ip;
+   uint8_t num_masked_bits;
 } __attribute__((__packed__)) c_src_filter;
 
 typedef struct {
-    uint32_t mLen;
-    uint32_t mType;
-    char templateName[30];
-    char mVirtualHostID[IDSIZE];
-    c_src_filter srcFilters[0];
+   uint32_t mLen;
+   uint32_t mType;
+   char templateName[30];
+   char mVirtualHostID[IDSIZE];
+   c_src_filter srcFilters[0];
 } __attribute__((__packed__)) c_open_template;
 
 /* authentication request */
 typedef struct {
-    uint32_t mLen;
-    uint32_t mType;
-    uint8_t salt[0];
+   uint32_t mLen;
+   uint32_t mType;
+   uint8_t salt[0];
 
 } __attribute__((__packed__)) c_auth_request;
 
 /* authentication reply */
 typedef struct {
-    uint32_t mLen;
-    uint32_t mType;
-    uint32_t usernameLen;
-    char username[0];
-    /* remainder of the message is the salted sha1 of the user's password */
+   uint32_t mLen;
+   uint32_t mType;
+   uint32_t usernameLen;
+   char username[0];
+   /* remainder of the message is the salted sha1 of the user's password */
 } __attribute__((__packed__)) c_auth_reply;
 
 /* authentication status (whether or not a reply was accepted) */
 typedef struct {
-    uint32_t mLen;
-    uint32_t mType;
-    uint8_t auth_ok;
-    char msg[0];
+   uint32_t mLen;
+   uint32_t mType;
+   uint8_t auth_ok;
+   char msg[0];
 
 } __attribute__((__packed__)) c_auth_status;
 

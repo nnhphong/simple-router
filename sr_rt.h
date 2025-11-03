@@ -28,11 +28,11 @@
  * -------------------------------------------------------------------------- */
 
 struct sr_rt {
-    struct in_addr dest;
-    struct in_addr gw;
-    struct in_addr mask;
-    char interface[sr_IFACE_NAMELEN];
-    struct sr_rt *next;
+   struct in_addr  dest;
+   struct in_addr  gw;
+   struct in_addr  mask;
+   char            interface[sr_IFACE_NAMELEN];
+   struct sr_rt   *next;
 };
 
 int sr_load_rt(struct sr_instance *, const char *);
@@ -42,4 +42,4 @@ void sr_print_routing_table(struct sr_instance *sr);
 void sr_print_routing_entry(struct sr_rt *entry);
 struct sr_rt *sr_get_matching_route(struct sr_instance *sr, uint32_t dest_ip);
 
-#endif /* --  sr_RT_H -- */
+#endif                          /* --  sr_RT_H -- */

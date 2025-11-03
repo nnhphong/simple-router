@@ -10,29 +10,29 @@
 #define SR_ROUTER_H
 
 #include <netinet/in.h>
-#include <sys/time.h>
 #include <stdio.h>
+#include <sys/time.h>
 
-#include "sr_protocol.h"
 #include "sr_arpcache.h"
+#include "sr_protocol.h"
 
 /* we dont like this debug , but what to do for varargs ? */
 #ifdef _DEBUG_
 #define Debug(x, args...) printf(x, ##args)
-#define DebugMAC(x)                                                            \
-    do {                                                                       \
-        int ivyl;                                                              \
-        for (ivyl = 0; ivyl < 5; ivyl++)                                       \
-            printf("%02x:", (unsigned char)(x[ivyl]));                         \
-        printf("%02x", (unsigned char)(x[5]));                                 \
-    } while (0)
+#define DebugMAC(x) \
+   do {                                                                        \
+      int ivyl;                                                                \
+      for (ivyl = 0; ivyl < 5; ivyl++)                                         \
+         printf("%02x:", (unsigned char)(x[ivyl]));                            \
+      printf("%02x", (unsigned char)(x[5]));                                   \
+   } while (0)
 #else
 #define Debug(x, args...)                                                      \
-    do {                                                                       \
-    } while (0)
-#define DebugMAC(x)                                                            \
-    do {                                                                       \
-    } while (0)
+   do {                                                                        \
+   } while (0)
+#define DebugMAC(x) \
+   do {                                                                        \
+   } while (0)
 #endif
 
 #define INIT_TTL 255
@@ -50,17 +50,17 @@ struct sr_rt;
  * -------------------------------------------------------------------------- */
 
 struct sr_instance {
-    int sockfd;        /* socket to server */
-    char user[32];     /* user name */
-    char host[32];     /* host name */
-    char template[30]; /* template name if any */
-    unsigned short topo_id;
-    struct sockaddr_in sr_addr;  /* address to server */
-    struct sr_if *if_list;       /* list of interfaces */
-    struct sr_rt *routing_table; /* routing table */
-    struct sr_arpcache cache;    /* ARP cache */
-    pthread_attr_t attr;
-    FILE *logfile;
+   int sockfd;        /* socket to server */
+   char user[32];     /* user name */
+   char host[32];     /* host name */
+   char template[30]; /* template name if any */
+   unsigned short topo_id;
+   struct sockaddr_in sr_addr;  /* address to server */
+   struct sr_if *if_list;       /* list of interfaces */
+   struct sr_rt *routing_table; /* routing table */
+   struct sr_arpcache cache;    /* ARP cache */
+   pthread_attr_t attr;
+   FILE *logfile;
 };
 
 /* -- sr_main.c -- */
@@ -75,7 +75,8 @@ int sr_read_from_server(struct sr_instance *);
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance *);
 void sr_handlepacket(struct sr_instance *, uint8_t *, unsigned int, char *);
-int sr_route_and_send(struct sr_instance *, uint8_t *, unsigned int, int, char *);
+int sr_route_and_send(struct sr_instance *, uint8_t *, unsigned int, int,
+                      char *);
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance *, const char *);
