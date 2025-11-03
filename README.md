@@ -162,5 +162,5 @@ Defined in `sr_rt.c`
  
 - [**Phong Ngoc Hoang (Paul) Nguyen**](https://github.com/nnhphong)
   - Sending out ARP request: `sr_arpcache.c/sr_handle_arpreq()`
-  - Update ARP cache and respond to ARP request: 'sr_router.c/sr_handlepacket()`
+  - Update ARP cache and respond to ARP request: `sr_router.c/sr_handlepacket()`
   - Code review for ICMP and write test cases
