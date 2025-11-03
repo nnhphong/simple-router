@@ -55,75 +55,9 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 
  */
 
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-void send_unreachable_icmp(struct sr_instance *sr, int type, int code,
-                           sr_ip_hdr_t *pkt_ip, uint8_t *src_mac,
-                           uint8_t *dst_mac, struct sr_if *interface) {
-    int old_pkt_data = MIN(8, pkt_ip->ip_len - pkt_ip->ip_hl);
-    /* Ethernet layer */
-    sr_ethernet_hdr_t *ether = malloc(sizeof(sr_ethernet_hdr_t));
-    memcpy(ether->ether_shost, src_mac, ETHER_ADDR_LEN);
-    memcpy(ether->ether_dhost, dst_mac, ETHER_ADDR_LEN);
-    ether->ether_type = htons(ethertype_ip);
-
-    /* IP layer, assuming we don't need to fragment the packets */
-    sr_ip_hdr_t *ip = malloc(sizeof(sr_ip_hdr_t));
-    /*
-    tos = 0b00000000
-    routine, normal delay, normal throughput, normal reliability
-    */
-    ip->ip_v = 4;
-    ip->ip_hl = sizeof(sr_ip_hdr_t) / 4;
-    ip->ip_tos = 0;
-    ip->ip_len = htons(
-        sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t) + 4 + sizeof(sr_ip_hdr_t) +
-        old_pkt_data); /* this is for original packet ip's header and its first
-                          64 bits of data datagram*/
-    ip->ip_id = 0;     /* ip_id = 0b000, may fragment, last fragment*/
-    ip->ip_off = 0;
-    ip->ip_ttl = 5; /* assume time-to-live is 5 seconds */
-    ip->ip_p = 1;   /* https://datatracker.ietf.org/doc/html/rfc790 */
-    ip->ip_src = interface->ip;
-    ip->ip_dst = pkt_ip->ip_src;
-    ip->ip_sum = cksum(ip, sizeof(sr_ip_hdr_t));
-
-    /* ICMP layer */
-    int icmp_hdr_len =
-        sizeof(sr_icmp_hdr_t) + 4 + sizeof(sr_ip_hdr_t) + old_pkt_data;
-    sr_icmp_hdr_t *icmp = malloc(icmp_hdr_len);
-    icmp->icmp_type = type;
-    icmp->icmp_code = code;
-
-    uint8_t *icmp_data = (uint8_t *)icmp;
-    memcpy(icmp_data + sizeof(sr_icmp_hdr_t) + 4, pkt_ip, sizeof(sr_ip_hdr_t));
-    memcpy(icmp_data + sizeof(sr_icmp_hdr_t) + 4 + sizeof(sr_ip_hdr_t),
-           pkt_ip +
-               1, /* skip through ip header section to ip datagram section*/
-           old_pkt_data);
-    icmp->icmp_sum = cksum(icmp, icmp_hdr_len);
-
-    int len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + icmp_hdr_len;
-    uint8_t *packet = malloc(len);
-    memcpy(packet, ether, sizeof(sr_ethernet_hdr_t));
-    memcpy(packet + sizeof(sr_ethernet_hdr_t), ip, sizeof(sr_ip_hdr_t));
-    memcpy(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), icmp,
-           icmp_hdr_len);
-    /* printf("I am sending ICMP packet with size %ld...\n", len);
-    print_hdr_eth(packet);
-    print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
-    print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-    printf("\n\n");   */
-    sr_send_packet(sr, packet, len, interface->name);
-
-    free(ether);
-    free(ip);
-    free(icmp);
-    free(packet);
-}
-
 void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
     time_t now = time(NULL);
-
+    
     if (difftime(now, req->sent) > 1.0) {
         if (req->times_sent >= 5) {
             struct sr_packet *pkt;
@@ -134,37 +68,10 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
                   sr, pkt->buf, pkt->len, pkt->iface,
                   SR_ICMP_HOST_UNREACHABLE
                );
-
             sr_arpreq_destroy(&sr->cache, req);
         } else {
             /* send out ARP request */
-            struct sr_rt *route =
-                (struct sr_rt *)sr_get_matching_route(sr, req->ip);
-            struct sr_if *interface = sr_get_interface(sr, route->interface);
-            if (interface == NULL) {
-                fprintf(stderr, "Interface name is unrecognized\n");
-                return;
-            }
-            unsigned char *mac_addr = interface->addr;
-
-            uint8_t packet[SR_ARP_FRAME_LEN];
-            sr_ethernet_hdr_t *eth = (sr_ethernet_hdr_t *)packet;
-            sr_arp_hdr_t *arp = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-
-            memcpy(eth->ether_shost, mac_addr, ETHER_ADDR_LEN);
-            memset(eth->ether_dhost, 0xff, ETHER_ADDR_LEN);
-            eth->ether_type = htons(ethertype_arp);
-            arp->ar_hrd = htons(arp_hrd_ethernet);
-            arp->ar_pro = htons(ethertype_ip);
-            arp->ar_hln = 6;
-            arp->ar_pln = 4;
-            arp->ar_op = htons(arp_op_request);
-            arp->ar_sip = interface->ip;
-            arp->ar_tip = req->ip;
-            memcpy(arp->ar_sha, mac_addr, ETHER_ADDR_LEN);
-            memset(arp->ar_tha, 0xff, ETHER_ADDR_LEN);
-
-            sr_send_packet(sr, packet, SR_ARP_FRAME_LEN, interface->name);
+            sr_send_arp(sr, arp_op_request, req->ip, NULL);
 
             req->times_sent += 1;
             req->sent = now;
@@ -396,4 +303,49 @@ void *sr_arpcache_timeout(void *sr_ptr) {
     }
 
     return NULL;
+}
+
+/* Send out ARP request or response to target IP
+   if op_code == arp_op_request -> dest_mac_addr = NULL
+   if op_code == arp_op_reply   -> dest_mac_addr is dest host's MAC
+*/
+void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode op_code, uint32_t dest_ip, unsigned char *dest_mac_addr) {
+    struct sr_rt *route =
+        (struct sr_rt *)sr_get_matching_route(sr, dest_ip);
+    struct sr_if *interface = sr_get_interface(sr, route->interface);
+    if (interface == NULL) {
+        fprintf(stderr, "Interface name is unrecognized\n");
+        return;
+    }
+    unsigned char *mac_addr = interface->addr;
+
+    uint8_t packet[SR_ARP_FRAME_LEN];
+    sr_ethernet_hdr_t *eth = (sr_ethernet_hdr_t *)packet;
+    sr_arp_hdr_t *arp = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
+    memcpy(eth->ether_shost, mac_addr, ETHER_ADDR_LEN);
+    eth->ether_type = htons(ethertype_arp);
+    arp->ar_hrd = htons(arp_hrd_ethernet);
+    arp->ar_pro = htons(ethertype_ip);
+    arp->ar_hln = 6;
+    arp->ar_pln = 4;
+    arp->ar_op = htons(op_code);
+    arp->ar_sip = interface->ip;
+    arp->ar_tip = dest_ip;
+    memcpy(arp->ar_sha, mac_addr, ETHER_ADDR_LEN);
+    
+
+    if (op_code == arp_op_request) {
+        memset(eth->ether_dhost, 0xff, ETHER_ADDR_LEN);
+        memset(arp->ar_tha, 0xff, ETHER_ADDR_LEN);
+    }
+    else {
+        memcpy(eth->ether_dhost, dest_mac_addr, ETHER_ADDR_LEN);
+        memcpy(arp->ar_tha, dest_mac_addr, ETHER_ADDR_LEN);
+    }
+
+    print_hdr_eth(packet);
+    print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));
+
+    sr_send_packet(sr, packet, SR_ARP_FRAME_LEN, interface->name);
 }

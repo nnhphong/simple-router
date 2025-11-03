@@ -20,10 +20,20 @@ void sr_send_icmp_error(
    struct sr_ip_hdr *old_ip =
        (struct sr_ip_hdr *)(packet +
                             sizeof(struct sr_ethernet_hdr));
+   
+   /* do not send error if its an ICMP error, or offset is not 0 */
+   if (old_ip->ip_p == ip_protocol_icmp) {
+      struct sr_icmp_hdr *old_icmp =
+         (struct sr_icmp_hdr *)(packet +
+                                sizeof(struct sr_ethernet_hdr) +
+                                sizeof(struct sr_ip_hdr));
 
-   /* do not send error if its ICMP message, or offset is not 0*/
-   if (old_ip->ip_p == ip_protocol_icmp || ntohs(old_ip->ip_off) & IP_OFFMASK)
-     return;
+      if (!(old_icmp->icmp_type == 8 || old_icmp->icmp_type == 0)) /* only allow echo */
+         return;
+   }
+   
+   if (ntohs(old_ip->ip_off) & IP_OFFMASK != 0)
+      return;
    
    uint8_t new_pkt[SR_ICMP_T3_FRAME_LEN];
    struct sr_ip_hdr *new_ip =
@@ -51,6 +61,7 @@ void sr_send_icmp_error(
    new_ip->ip_sum = 0;
    new_ip->ip_sum = cksum(new_ip, sizeof(*new_ip));
 
+   print_addr_ip_int(old_ip->ip_src);
    /*
      ICMP, just fill in type, code, and copy the 28 bytes into DATA:
 

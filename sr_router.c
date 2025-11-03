@@ -70,9 +70,10 @@ void sr_init(struct sr_instance *sr) {
 */
 int sr_route_and_send(struct sr_instance *sr, uint8_t *packet, unsigned int len, int set_ip, char *interface) {
   uint32_t dest_ip =
-      ntohl(*(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
-                          offsetof(struct sr_ip_hdr, ip_dst)));
+      *(uint32_t *)(packet + sizeof(struct sr_ethernet_hdr) +
+                          offsetof(struct sr_ip_hdr, ip_dst));
   struct sr_rt *rt_entry = sr_get_matching_route(sr, dest_ip);
+  print_addr_ip_int(dest_ip);
 
   if (rt_entry == NULL) {
      sr_send_icmp_error(sr, packet, len, interface, SR_ICMP_NET_UNREACHABLE);
@@ -123,7 +124,7 @@ struct sr_if *is_ip_to_self(struct sr_instance *sr, uint32_t packet_ip_addr) {
   struct sr_if *interface = sr->if_list;
 
   while (interface != NULL) {
-    if (interface->ip == ntohl(packet_ip_addr)) {
+    if (ntohl(interface->ip) == ntohl(packet_ip_addr)) {
       return interface;
     }
     interface = interface->next;
@@ -157,46 +158,6 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
   assert(packet);
   assert(interface);
 
-  /* Beginning of test code */
-  /* I was trying to create fake ARP requests for my router to send
-  and handle invalid arp requets, i.e has been sent 5+ times. So far, sending
-  ARP request is done, but i still cant verify if the client can receive
-  the ICMP error message if the router fails to perform the ARP request...
-
-  feel free to comment this code snippet below if you are using this commit*/
-
-
-  if (ethertype(packet) == ethertype_ip) {
-    print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
-  } else {
-    /* the arp reply is back YAY */
-    print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));
-  }
-
-  sr_ethernet_hdr_t *eth = (sr_ethernet_hdr_t *)packet;
-  sr_ip_hdr_t *ip = malloc(sizeof(sr_ip_hdr_t));
-  /*
-  tos = 0b00000000
-  routine, normal delay, normal throughput, normal reliability
-  */
-  ip->ip_v = 4;
-  ip->ip_hl = sizeof(sr_ip_hdr_t) / 4;
-  ip->ip_tos = 0;
-  ip->ip_len = htons(sizeof(sr_ip_hdr_t));
-  ip->ip_id = 0; /* ip_id = 0b000, may fragment, last fragment*/
-  ip->ip_off = 0;
-  ip->ip_ttl = 5; /* assume time-to-live is 5 hops */
-  ip->ip_p = 1;   /* https://datatracker.ietf.org/doc/html/rfc790 */
-  ip->ip_src = inet_addr("10.0.1.100");
-  ip->ip_dst = inet_addr("192.168.2.2");
-  ip->ip_sum = cksum(ip, sizeof(sr_ip_hdr_t));
-  uint8_t *pkt = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-  memcpy(pkt, eth, sizeof(sr_ethernet_hdr_t));
-  memcpy(pkt + sizeof(sr_ethernet_hdr_t), ip, sizeof(sr_ip_hdr_t));
-  sr_arpcache_queuereq(&sr->cache, inet_addr("192.168.2.2"), pkt, len,
-                       interface); 
-  /* End of test code */
-
   /* Do not forget to keep ip addresses in network-byte order when handling
    * packet*/
 
@@ -208,7 +169,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
   order** IP and the interface obtained in step 1
 
   route = sr_get_matching_route(packet)
-  sr_arpcache_queuereq(sr.cache, packet.dest_ip, packet, len, route.interface)
+  sr_arpcache_queuereq(sriphdr.cache, packet.dest_ip, packet, len, route.interface)
   */
 
   /*
@@ -240,6 +201,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
     /*print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));*/
 
     sr_ip_hdr_t *iphdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t)); 
 
     /* 5.1.1 Verify Checksum */
     uint16_t packet_sum = iphdr->ip_sum;
@@ -259,7 +221,7 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
         fprintf(stderr, "ICMP packet too short\n");
         return;
       }
-      print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+      /* print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); */
       icmphdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) +
                                   sizeof(sr_ip_hdr_t));
     }
@@ -300,6 +262,31 @@ void sr_handlepacket(struct sr_instance *sr, uint8_t *packet /* lent */,
       return;
     }
     print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));
+    /*
+    Need to handle 2 things:
+    - If ARP reply -> update ARP cache
+    - If ARP request -> sendout ARP reply
+    */
+    sr_ethernet_hdr_t ethhdr = *(sr_ethernet_hdr_t *)packet;
+    sr_arp_hdr_t arphdr = *(sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
+    if (ntohs(arphdr.ar_op) == arp_op_reply) {
+        struct sr_arpreq *req = sr_arpcache_insert(&sr->cache, arphdr.ar_sha, arphdr.ar_sip);
+
+        if (req == NULL) return;
+        
+        struct sr_packet *pkt;
+        for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
+            struct sr_ethernet_hdr *pkt_eth = (struct sr_ethernet_hdr *)pkt->buf;
+            memcpy(pkt_eth->ether_dhost, arphdr.ar_sha, ETHER_ADDR_LEN);
+            sr_route_and_send(sr, pkt->buf, pkt->len, 0, interface);
+        }
+        sr_arpreq_destroy(&(sr->cache), req);
+        sr_arpcache_dump(&(sr->cache));
+    }
+    else if (is_ip_to_self(sr, arphdr.ar_tip)) {  
+        /* Send out ARP reply */
+        sr_send_arp(sr, arp_op_reply, arphdr.ar_sip, ethhdr.ether_shost);
+    }
   } else {
     fprintf(stderr, "Unknown packet type (%d) received\n", ethtype);
     return;
