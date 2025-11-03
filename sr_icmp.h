@@ -61,4 +61,6 @@ void sr_send_echo_reply(struct sr_instance *sr,
                         unsigned int len,
                         char *interface);
 
+int sr_send_icmp_t0(struct sr_instance *, uint8_t, uint8_t, uint32_t, char *);
+
 #endif /* SR_ICMP_H */
