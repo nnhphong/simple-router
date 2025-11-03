@@ -13,7 +13,6 @@
   - [`sr_send_echo_reply()`](#sr_send_echo_reply)
   - [`sr_route_and_send()`](#sr_route_and_send)
   - [`sr_get_matching_route()`](#sr_get_matching_route)
-  - [`is_ip_to_self()`](#is_ip_to_self)
 - [Members and Contributions](#members-and-contributions)
 
 ## Introduction
@@ -55,6 +54,8 @@ and run the submission with:
 ```
 ./sr
 ```
+
+Testing details can be found in [Testcase.md](Testcase.md)
 
 ## Technical Details
 
@@ -154,6 +155,7 @@ Defined in `sr_rt.c`
   - Longest prefix match routing: `sr_rt.c/sr_get_matching_route()`
   - Packet forwarding: `sr_router.c/sr_route_and_send()`
   - Sending ICMP messages: `sr_icmp.c/sr_send_icmp_error()`, `sr_icmp.c/sr_send_echo_reply()`
+  - Parts of ARP request handling: `sr_arpcache.c/sr_handle_arpreq()`
 
 - [**Jeremy Janella**](https://github.com/jjanella)
   - Handling IP & ICMP packets: `sr_router.c/sr_handlepacket()`
