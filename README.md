@@ -42,17 +42,22 @@ bash run.sh
 ```
 
 Inside the container, you will need to `./config.sh`, and then `./run_pox.sh`.
-
-You can then start mininet with `./run_mininet.sh`.
-
-To compile the code, go to the `/mininet/router/` directory (path in container), and you can compile with
+Open a new terminal, enter the container again and start mininet
 ```
-make
+$ docker exec -it d58a3 bash
+mininet@xxxxxx:/mininet$ ./run_mininet.sh
+```
+
+To compile the code, open another terminal, go to the `/mininet/router/` directory (path in container), and you can compile with
+```
+$ docker exec -it d58a3 bash
+mininet@xxxxxx:/mininet$ cd router/
+mininet@xxxxxx:/mininet/router$ make
 ```
 
 and run the submission with:
 ```
-./sr
+mininet@xxxxxx:/mininet/router$ ./sr
 ```
 
 Testing details can be found in [Testcase.md](Testcase.md)
