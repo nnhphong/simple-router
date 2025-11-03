@@ -159,3 +159,8 @@ Defined in `sr_rt.c`
   - Handling IP & ICMP packets: `sr_router.c/sr_handlepacket()`
   - Checking IP dest: `is_ip_to_self()`
   - Early versions of sending ICMP messages
+ 
+- [**Phong Ngoc Hoang (Paul) Nguyen**](https://github.com/nnhphong)
+  - Sending out ARP request: `sr_arpcache.c/sr_handle_arpreq()`
+  - Update ARP cache and respond to ARP request: 'sr_router.c/sr_handlepacket()`
+  - Code review for ICMP and write test cases
