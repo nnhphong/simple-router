@@ -22,7 +22,39 @@ This is a simple software based router that can forward IPv4 packets between int
 
 ## Instructions
 
-TODO: release
+Ensure you have Docker, and the openvswitch kernel modules on your native system.
+
+Go to the releases page, and download the zip archive.
+
+Extract the contents into a directory:
+```
+unzip D58-A3-Submission.zip -d d58a3/
+cd d58a3/
+```
+
+Build the docker container
+```
+docker build -t d58a3 .
+```
+
+You can start the container with the script `run.sh`
+```
+bash run.sh
+```
+
+Inside the container, you will need to `./config.sh`, and then `./run_pox.sh`.
+
+You can then start mininet with `./run_mininet.sh`.
+
+To compile the code, go to the `/mininet/router/` directory (path in container), and you can compile with
+```
+make
+```
+
+and run the submission with:
+```
+./sr
+```
 
 ## Technical Details
 
