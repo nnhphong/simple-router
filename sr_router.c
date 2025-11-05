@@ -190,6 +190,25 @@ void sr_handlepacket(
    }
    print_hdr_eth(packet);
 
+   struct sr_if *iface = sr_get_interface(sr, interface);
+   struct sr_ethernet_hdr *eth_hdr = (struct sr_ethernet_hdr *)packet;
+
+   /*
+     verify that the frame is destined for us.
+
+     either matches the incoming interface's hw addr,
+     or is a broadcast.
+   */
+
+   if (memcmp(eth_hdr->ether_dhost, iface->addr, ETHER_ADDR_LEN) != 0) {
+      static const uint8_t broadcast_addr[ETHER_ADDR_LEN] =
+         {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+      if (memcmp(eth_hdr->ether_dhost, broadcast_addr, ETHER_ADDR_LEN) != 0) {
+         printf("Frame not destined for us, dropping...\n");
+         return;
+      }
+   }
+
    /* IP */
    uint16_t ethtype = ethertype(packet);
    if (ethtype == ethertype_ip) {
